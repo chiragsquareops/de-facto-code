@@ -1,18 +1,17 @@
-/* # with minimal configurations
+# with minimal configurations
 # aurora serverless --> Check for the modules 
 
 module "aurora_mysql" {
   source = "terraform-aws-modules/rds-aurora/aws"
 
-  name              = "${local.name}-mysql"
+  name              = "${local.Name}-mysql"
   engine            = "aurora-mysql"
   engine_mode       = "serverless"
   storage_encrypted = true
 
-  vpc_id                = module.vpc.vpc_id
-  subnets               = module.vpc.database_subnets
+  vpc_id                = "vpc-025ec268649354acd"
+  subnets               = ["subnet-06a917e4c16916d39", "subnet-0767b78758056dc82"]
   create_security_group = true
-  allowed_cidr_blocks   = module.vpc.private_subnets_cidr_blocks
 
   monitoring_interval = 60
 
@@ -33,15 +32,21 @@ module "aurora_mysql" {
 }
 
 resource "aws_db_parameter_group" "example_mysql" {
-  name        = "${local.name}-aurora-db-mysql-parameter-group"
+  name        = "${local.Name}-aurora-db-mysql-parameter-group"
   family      = "aurora-mysql5.7"
-  description = "${local.name}-aurora-db-mysql-parameter-group"
-  tags        = local.tags
+  description = "${local.Name}-aurora-db-mysql-parameter-group"
+  tags = {
+    Environment = local.Environment
+    Name        = local.Name
+  }
 }
 
 resource "aws_rds_cluster_parameter_group" "example_mysql" {
-  name        = "${local.name}-aurora-mysql-cluster-parameter-group"
+  name        = "${local.Name}-aurora-mysql-cluster-parameter-group"
   family      = "aurora-mysql5.7"
-  description = "${local.name}-aurora-mysql-cluster-parameter-group"
-  tags        = local.tags
-} */
+  description = "${local.Name}-aurora-mysql-cluster-parameter-group"
+  tags = {
+    Environment = local.Environment
+    Name        = local.Name
+  }
+}

@@ -1,7 +1,7 @@
 # without nat_gateways and public subnets
 
 locals {
-  vpc_cidr = "172.10.0.0/16"
+  vpc_cidr = "172.50.0.0/16"
 }
 
 data "aws_availability_zones" "available" {}
@@ -14,7 +14,7 @@ module "key_pair_vpn" {
 }
 
 module "vpc" {
-  source = "squareops/vpc/aws"
+  source                                          = "squareops/vpc/aws"
   environment                                     = local.Environment
   name                                            = local.Name
   vpc_cidr                                        = local.vpc_cidr
@@ -24,11 +24,10 @@ module "vpc" {
   enable_database_subnet                          = false
   enable_intra_subnet                             = false
   one_nat_gateway_per_az                          = false
-  vpn_server_enabled                              = false
+  vpn_server_enabled                              = true
   vpn_server_instance_type                        = "t3a.small"
   vpn_key_pair                                    = module.key_pair_vpn.key_pair_name
   enable_flow_log                                 = false
   flow_log_max_aggregation_interval               = 60
   flow_log_cloudwatch_log_group_retention_in_days = 90
-
 }
