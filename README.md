@@ -1,15 +1,26 @@
 # De-facto-Infra-Code
 
 ``` bash
+.
 ├── packer
 │   ├── app.json.pkr.hcl
 │   ├── application_dependencies.sh
 │   ├── config.sh
 │   ├── nginx.conf
-│   ├── queue.json.pkr.hcl
-│   └── queue_dependencies.sh
+│   ├── queue_dependencies.sh
+│   └── queue.json.pkr.hcl
+├── README.md
 └── terraform
     ├── env
+    │   ├── base
+    │   │   └── main.tf
+    │   ├── dev
+    │   │   ├── app.tf
+    │   │   ├── local.tf
+    │   │   ├── provider.tf
+    │   │   ├── rds.tf
+    │   │   ├── vpc.tf
+    │   │   └── worker.tf
     │   └── prod
     │       ├── app_asg.tf
     │       ├── backend.tf
