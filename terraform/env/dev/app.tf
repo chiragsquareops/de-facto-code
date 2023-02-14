@@ -106,27 +106,133 @@ module "asg" {
 
   scaling_policies = {
     asg-cpu-policy = {
-      policy_type = "TargetTrackingScaling"
+      policy_type               = "TargetTrackingScaling"
+      estimated_instance_warmup = 120
       target_tracking_configuration = {
         predefined_metric_specification = {
           predefined_metric_type = "ASGAverageCPUUtilization"
         }
         target_value = 50.0
       }
-    }
-    /* alb-request-rate-policy = {
-      policy_type = "TargetTrackingScaling"
+    },
+    request-count-per-target = {
+      policy_type               = "TargetTrackingScaling"
+      estimated_instance_warmup = 120
       target_tracking_configuration = {
         predefined_metric_specification = {
           predefined_metric_type = "ALBRequestCountPerTarget"
-          resource_label         = "testLabel"
+          resource_label         = "${module.alb.lb_arn_suffix}/${module.alb.target_group_arn_suffixes[0]}"
         }
-        target_value = 20.0
+        target_value = 800
       }
-    } */
+    }
   }
 }
 
+
+resource "aws_autoscaling_policy" "RAM_based_scale_out" {
+  name                   = "${local.Name}-asg-RAM-scale-out-policy"
+  autoscaling_group_name = module.asg.autoscaling_group_name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "RAM_based_scale_out_alarm" {
+  alarm_name          = "${local.Name}-asg-scale-out-alarm"
+  alarm_description   = "asg-scale-out-cpu-alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "mem_used_percent"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = local.ram_threshold_to_scale_out
+  dimensions = {
+    "AutoScalingGroupName" = module.asg.autoscaling_group_name
+  }
+  actions_enabled = true
+  alarm_actions   = [aws_autoscaling_policy.RAM_based_scale_out.arn]
+}
+
+resource "aws_autoscaling_policy" "RAM_based_scale_in" {
+  name                   = "${local.Name}-asg-RAM-scale-in-policy"
+  autoscaling_group_name = module.asg.autoscaling_group_name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "-1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "RAM_based_scale_in_alarm" {
+  alarm_name          = "${local.Name}-asg-scale-in-alarm"
+  alarm_description   = "asg-scale-in-cpu-alarm"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "mem_used_percent"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = local.ram_threshold_to_scale_in
+  dimensions = {
+    "AutoScalingGroupName" = module.asg.autoscaling_group_name
+  }
+  actions_enabled = true
+  alarm_actions   = [resource.aws_autoscaling_policy.RAM_based_scale_in.arn]
+}
+
+resource "aws_autoscaling_policy" "asg_queue_scale_in" {
+  name                   = "${local.Name}-scale-in-policy"
+  autoscaling_group_name = module.asg.autoscaling_group_name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "-1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "asg_queue_scale_in_alarm" {
+  alarm_name          = "${local.Name}-queue-asg-scale-in-alarm"
+  alarm_description   = "asg-scale-in-cpu-alarm"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "SQS"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = local.queue_threshold_scale_in
+  dimensions = {
+    "AutoScalingGroupName" = module.asg.autoscaling_group_name
+  }
+  actions_enabled = true
+  alarm_actions   = [resource.aws_autoscaling_policy.asg_queue_scale_in.arn]
+}
+
+resource "aws_autoscaling_policy" "asg_queue_scale_out" {
+  name                   = "${local.Name}-scale-out-policy"
+  autoscaling_group_name = module.asg.autoscaling_group_name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = "1"
+  cooldown               = "300"
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_cloudwatch_metric_alarm" "asg_queue_scale_out_alarm" {
+  alarm_name          = "${local.Name}-scale-out-alarm"
+  alarm_description   = "asg-scale-out-cpu-alarm"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "SQS"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = local.queue_threshold_scale_out
+  dimensions = {
+    "AutoScalingGroupName" = module.asg.autoscaling_group_name
+  }
+  actions_enabled = true
+  alarm_actions   = [resource.aws_autoscaling_policy.asg_queue_scale_out.arn]
+}
 
 
 
@@ -322,7 +428,7 @@ resource "aws_iam_role_policy" "dev-app-policy" {
 POLICY
 }
 
-resource "aws_codebuild_project" "laravel-app" {
+resource "aws_codebuild_project" "app" {
   name          = format("%s-%s-codebuild-app", local.Environment, local.Name)
   description   = "test_codebuild_project"
   build_timeout = "5"
@@ -348,7 +454,7 @@ resource "aws_codebuild_project" "laravel-app" {
 
   source {
     type            = "GITHUB"
-    location        = local.Environment
+    location        = local.location
     git_clone_depth = 1
 
     git_submodules_config {
@@ -676,4 +782,58 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
   ]
 }
 EOF
-} 
+}
+
+
+module "acm" {
+  source  = "terraform-aws-modules/acm/aws"
+  version = "~> 4.0"
+
+  domain_name = "*.${local.domain_name}"
+  zone_id     = local.zone_id
+
+  subject_alternative_names = [
+    "*.${local.domain_name}",
+    "${local.Name}.${local.domain_name}",
+    "${local.host_headers}",
+  ]
+
+  wait_for_validation = true
+
+  tags = {
+    Environment = local.Environment
+    Name        = local.Name
+  }
+}
+
+
+module "route53-record" {
+  allow_overwrite = true
+  source          = "clouddrove/route53-record/aws"
+  version         = "1.0.1"
+  zone_id         = local.zone_id
+  name            = "${local.Name}.${local.domain_name}"
+  type            = "A"
+  alias = {
+    name                   = module.alb.lb_dns_name
+    zone_id                = local.zone_id_alb ########### HOSTED ZONE IF OF ALB WHICH IS ACCORDING TO REGION IN WHICH IT IS HOSTED ###########
+    evaluate_target_health = true
+  }
+}
+
+
+
+
+module "appvpn_route53-record" {
+  allow_overwrite = true
+  source          = "clouddrove/route53-record/aws"
+  version         = "1.0.1"
+  zone_id         = local.zone_id
+  name            = local.host_headers
+  type            = "A"
+  alias = {
+    name                   = module.alb.lb_dns_name
+    zone_id                = local.zone_id_alb
+    evaluate_target_health = true
+  }
+}
