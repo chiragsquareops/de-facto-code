@@ -1,72 +1,51 @@
-module "db" {
-  source = "terraform-aws-modules/rds/aws"
+# with minimal configurations
+# aurora serverless --> Check for the modules 
 
-  identifier = local.identifier
+module "aurora_mysql" {
+  source = "terraform-aws-modules/rds-aurora/aws"
 
-  engine            = local.engine
-  engine_version    = local.engine_version
-  instance_class    = local.instance_class
-  allocated_storage = local.allocated_storage
+  name              = format("%s-%s-mysql", local.Environment, local.Name)
+  engine            = "aurora-mysql"
+  engine_mode       = "serverless"
+  storage_encrypted = true
 
-  db_name  = local.db_name
-  username = local.username
-  port     = "3306"
-  password = local.password
+  vpc_id                = module.vpc.vpc_id
+  subnets               = module.vpc.database_subnets
+  create_security_group = true
 
-  vpc_security_group_ids = local.security_groups
+  monitoring_interval = 60
 
-  monitoring_interval    = "30"
-  monitoring_role_name   = "LaravelMonitoringRole"
-  create_monitoring_role = true
+  apply_immediately   = true
+  skip_final_snapshot = true
 
-  create_db_subnet_group = true
-  subnet_ids             = local.vpc_zone_identifier
+  db_parameter_group_name         = aws_db_parameter_group.aurora_db_mysql.id
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora_db_mysql.id
 
-  create_db_parameter_group = false
-
-  create_db_option_group = false
-
-  create_random_password = false
-
-  family = "mysql5.7"
-
-  major_engine_version = "5.7"
-
-  deletion_protection = false
-
-  tags = {
-    Owner       = local.Owner
-    Environment = local.Environment
-    Name        = local.Name
-    Terraform   = local.Terraform
+  scaling_configuration = {
+    auto_pause               = true
+    min_capacity             = 2
+    max_capacity             = 16
+    seconds_until_auto_pause = 300
+    timeout_action           = "ForceApplyCapacityChange"
   }
 }
 
-resource "aws_security_group" "laraveldb-sg" {
-  name        = format("%s-%s--rds-sg", local.Environment, local.Name)
-  description = "Allow TLS inbound and outbund traffic"
-  vpc_id      = local.vpc_id
-  dynamic "ingress" {
-    for_each = [3306]
-    iterator = port
-    content {
-      description = "TLS from vpc"
-      from_port   = port.value
-      to_port     = port.value
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    }
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_db_parameter_group" "aurora_db_mysql" {
+  name        = "${local.Name}-aurora-db-mysql-parameter-group"
+  family      = "aurora-mysql5.7"
+  description = "${local.Name}-aurora-db-mysql-parameter-group"
   tags = {
-    Owner       = local.Owner
     Environment = local.Environment
     Name        = local.Name
-    Terraform   = local.Terraform
+  }
+}
+
+resource "aws_rds_cluster_parameter_group" "aurora_db_mysql" {
+  name        = "${local.Name}-aurora-mysql-cluster-parameter-group"
+  family      = "aurora-mysql5.7"
+  description = "${local.Name}-aurora-mysql-cluster-parameter-group"
+  tags = {
+    Environment = local.Environment
+    Name        = local.Name
   }
 }
