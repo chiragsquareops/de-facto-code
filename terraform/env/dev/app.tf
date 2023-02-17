@@ -837,3 +837,14 @@ module "appvpn_route53-record" {
     evaluate_target_health = true
   }
 }
+
+/* module "s3_bucket_for_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
+
+  bucket = "app-alb-logs"
+  acl    = "log-delivery-write"
+
+  force_destroy = true
+
+  attach_elb_log_delivery_policy = true 
+} */

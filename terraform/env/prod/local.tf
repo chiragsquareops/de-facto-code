@@ -2,6 +2,9 @@ locals {
 
   Environment                = "prod"
   Name                       = "laravel"
+  vpc_cidr                   = "172.10.0.0/16"
+  app_image_id               = "ami-07388f7062e8065a9"
+  instance_type              = "t3a.micro"
   image                      = "aws/codebuild/standard:2.0"
   type                       = "LINUX_CONTAINER"
   compute_platform           = "Server"

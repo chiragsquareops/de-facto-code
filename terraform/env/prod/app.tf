@@ -6,37 +6,41 @@
 # S3 buckets --> To store artifacts (IAM Roles)
 # Cloudwatch Alarms --> 
 # Route 53 Healthchecks --> 
+# app_ami_id --> called from local 
 
-module "key_pair_asg" {
+module "key_pair_app" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
   key_name           = format("%s-%s-asg", local.Environment, local.Name)
   ssm_parameter_path = format("%s-%s-asg", local.Environment, local.Name)
 }
 
+module "s3_bucket_alb_access_logs" {
+  source = "terraform-aws-modules/s3-bucket/aws"
 
-module "asg-sg" {
+  bucket = "laravel-access-logs"
+  acl    = "log-delivery-write"
+
+  force_destroy = true
+
+  attach_elb_log_delivery_policy = true
+}
+
+module "app_asg_sg" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
 
-  name        = format("%s-%s-sg", local.Environment, local.Name)
+  name        = format("%s_%s_sg", local.Environment, local.Name)
   description = "Security group for Application Instances"
   vpc_id      = module.vpc.vpc_id
   ingress_with_cidr_blocks = [
     {
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      description = "http port"
-      cidr_blocks = "0.0.0.0/0"
-    },
-    {
-      from_port   = 443
-      to_port     = 443
+      from_port   = 8000
+      to_port     = 8000
       protocol    = "tcp"
       description = "https port"
       cidr_blocks = "0.0.0.0/0"
-    }
+    },
   ]
   egress_with_cidr_blocks = [
     {
@@ -49,10 +53,10 @@ module "asg-sg" {
   ]
 }
 
-module "app-asg" {
+module "app_asg" {
   source  = "terraform-aws-modules/autoscaling/aws"
   version = "6.7.0"
-  name    = format("%s-%s-asg", local.Environment, local.Name)
+  name    = format("%s_%s_asg", local.Environment, local.Name)
 
   min_size                  = 0
   max_size                  = 1
@@ -75,12 +79,12 @@ module "app-asg" {
   }
 
 
-  launch_template_name        = format("%s-%s-lt", local.Environment, local.Name)
+  launch_template_name        = format("%s_%s_lt", local.Environment, local.Name)
   launch_template_description = "Launch template example"
   update_default_version      = true
 
-  image_id          = "ami-07388f7062e8065a9"
-  instance_type     = "t3a.micro"
+  image_id          = local.app_image_id
+  instance_type     = local.instance_type
   key_name          = module.key_pair_asg.key_pair_name
   ebs_optimized     = false
   enable_monitoring = false
@@ -88,9 +92,9 @@ module "app-asg" {
   user_data         = base64encode(local.user_data)
 
   create_iam_instance_profile = true
-  iam_role_name               = format("%s-%s-instance-role", local.Environment, local.Name)
+  iam_role_name               = format("%s_%s_instance-role", local.Environment, local.Name)
   iam_role_path               = "/ec2/"
-  iam_role_description        = "IAM role example"
+  iam_role_description        = "IAM role for application"
   iam_role_tags = {
     CustomIamRole = "Yes"
   }
@@ -104,7 +108,7 @@ module "app-asg" {
   }
 
   scaling_policies = {
-    asg-cpu-policy = {
+    asg_cpu_policy = {
       policy_type               = "TargetTrackingScaling"
       estimated_instance_warmup = 120
       target_tracking_configuration = {
@@ -114,7 +118,7 @@ module "app-asg" {
         target_value = 50.0
       }
     },
-    request-count-per-target = {
+    request_count_per_target = {
       policy_type               = "TargetTrackingScaling"
       estimated_instance_warmup = 120
       target_tracking_configuration = {
@@ -130,69 +134,78 @@ module "app-asg" {
 
 
 resource "aws_autoscaling_policy" "RAM_based_scale_out" {
-  name                   = "${local.Name}-asg-RAM-scale-out-policy"
-  autoscaling_group_name = module.app-asg.autoscaling_group_name
+  name                   = "${local.Name}_asg_RAM_scale_out_policy"
+  autoscaling_group_name = module.app_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "1"
   cooldown               = "300"
   policy_type            = "SimpleScaling"
 }
 
-resource "aws_cloudwatch_metric_alarm" "RAM_based_scale_out_alarm" {
-  alarm_name          = "${local.Name}-asg-scale-out-alarm"
-  alarm_description   = "asg-scale-out-cpu-alarm"
+module "ram_metric_scale_out_alarm" {
+  source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
+  version = "~> 3.0"
+
+  alarm_name          = "${local.Name}_asg_scale_out_alarm"
+  alarm_description   = "asg_scale_out_ram_alarm"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "mem_used_percent"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
+  evaluation_periods  = 1
   threshold           = local.ram_threshold_to_scale_out
-  dimensions = {
-    "AutoScalingGroupName" = module.app-asg.autoscaling_group_name
-  }
-  actions_enabled = true
-  alarm_actions   = [aws_autoscaling_policy.RAM_based_scale_out.arn]
+  period              = 60
+  unit                = "Count"
+
+  namespace   = "laravel-app"
+  metric_name = "mem_used_percent"
+  statistic   = "Average"
+
+  alarm_actions = [aws_autoscaling_policy.RAM_based_scale_out.arn]
 }
 
+
 resource "aws_autoscaling_policy" "RAM_based_scale_in" {
-  name                   = "${local.Name}-asg-RAM-scale-in-policy"
-  autoscaling_group_name = module.app-asg.autoscaling_group_name
+  name                   = "${local.Name}_asg_RAM_scale_in_policy"
+  autoscaling_group_name = module.app_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "-1"
   cooldown               = "300"
   policy_type            = "SimpleScaling"
 }
 
-resource "aws_cloudwatch_metric_alarm" "RAM_based_scale_in_alarm" {
-  alarm_name          = "${local.Name}-asg-scale-in-alarm"
-  alarm_description   = "asg-scale-in-cpu-alarm"
-  comparison_operator = "LessThanOrEqualToThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "mem_used_percent"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = local.ram_threshold_to_scale_in
-  dimensions = {
-    "AutoScalingGroupName" = module.app-asg.autoscaling_group_name
-  }
-  actions_enabled = true
-  alarm_actions   = [resource.aws_autoscaling_policy.RAM_based_scale_in.arn]
-}
+module "ram_metric_scale_in_alarm" {
+  source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
+  version = "~> 3.0"
 
+  alarm_name          = "${local.Name}_asg_scale_in_alarm"
+  alarm_description   = "asg_scale_in_ram_alarm"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  threshold           = local.ram_threshold_to_scale_in
+  period              = 60
+  unit                = "Count"
+
+  namespace   = "laravel-app"
+  metric_name = "mem_used_percent"
+  statistic   = "Average"
+
+  alarm_actions = [resource.aws_autoscaling_policy.RAM_based_scale_in.arn]
+}
 
 module "alb" {
   source             = "terraform-aws-modules/alb/aws"
   version            = "8.2.1"
-  name               = format("%s-%s-alb", local.Environment, local.Name)
+  name               = format("%s_%s_alb", local.Environment, local.Name)
   load_balancer_type = "application"
   vpc_id             = module.vpc.vpc_id
   subnets            = [element(module.vpc.public_subnets, 0), element(module.vpc.public_subnets, 1)]
   security_groups    = [module.alb-sg.security_group_id]
+
+  access_logs = {
+    bucket = "laravel-access-logs"
+  }
+
   target_groups = [
     {
-      name             = format("%s-%s-TG", local.Environment, local.Name)
+      name             = format("%s_%s_TG", local.Environment, local.Name)
       backend_protocol = "HTTP"
       backend_port     = 8000
       target_type      = "instance"
@@ -240,7 +253,7 @@ module "alb-sg" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
 
-  name        = format("%s-%s-alb-sg", local.Environment, local.Name)
+  name        = format("%s_%s_alb_sg", local.Environment, local.Name)
   description = "asg-sg"
   vpc_id      = module.vpc.vpc_id
   ingress_with_cidr_blocks = [
@@ -270,8 +283,8 @@ module "alb-sg" {
   ]
 }
 
-resource "aws_iam_role" "dev-app-role" {
-  name = format("%s-%s-codebuild-role", local.Environment, local.Name)
+resource "aws_iam_role" "codebuild_app_role" {
+  name = format("%s_%s_laravel_codebuild_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -289,8 +302,8 @@ resource "aws_iam_role" "dev-app-role" {
 EOF
 }
 
-resource "aws_iam_role_policy" "dev-app-policy" {
-  role = aws_iam_role.dev-app-role.name
+resource "aws_iam_role_policy" "codebuild_app_policy" {
+  role = aws_iam_role.codebuild_app_role.name
 
   policy = <<POLICY
 {
@@ -375,10 +388,10 @@ POLICY
 }
 
 resource "aws_codebuild_project" "app" {
-  name          = format("%s-%s-codebuild-app", local.Environment, local.Name)
-  description   = "test_codebuild_project"
+  name          = format("%s_%s_laravel_codebuild_app", local.Environment, local.Name)
+  description   = "App_codebuild_project"
   build_timeout = "5"
-  service_role  = aws_iam_role.dev-app-role.arn
+  service_role  = aws_iam_role.codebuild-app-role.arn
 
   artifacts {
     type = "NO_ARTIFACTS"
@@ -411,17 +424,17 @@ resource "aws_codebuild_project" "app" {
 
 resource "aws_codedeploy_app" "app" {
   compute_platform = local.compute_platform
-  name             = format("%s-%s-codedeploy-app", local.Environment, local.Name)
+  name             = format("%s_%s_laravel_codedeploy_app", local.Environment, local.Name)
 }
 
-resource "aws_codedeploy_deployment_group" "app-deploy-group" {
+resource "aws_codedeploy_deployment_group" "app_deploy_group" {
   app_name              = resource.aws_codedeploy_app.app.name
   deployment_group_name = aws_codedeploy_app.app.name
   service_role_arn      = resource.aws_iam_role.codedeploy_role.arn
-  autoscaling_groups    = [module.app-asg.autoscaling_group_name]
+  autoscaling_groups    = [module.app_asg.autoscaling_group_name]
 }
 resource "aws_iam_role" "codedeploy_role" {
-  name = format("%s-%s-codedeploy-role", local.Environment, local.Name)
+  name = format("%s_%s_codedeploy_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -441,7 +454,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "codedeploy_policy" {
-  name = format("%s-%s-codedeploy-policy", local.Environment, local.Name)
+  name = format("%s_%s_laravel_codedeploy_policy", local.Environment, local.Name)
   role = aws_iam_role.codedeploy_role.id
 
   policy = <<EOF
@@ -515,11 +528,11 @@ EOF
 }
 
 resource "aws_codepipeline" "codepipeline" {
-  name     = format("%s-%s-codepipeline", local.Environment, local.Name)
+  name     = format("%s_%s_laravel_codepipeline", local.Environment, local.Name)
   role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {
-    location = aws_s3_bucket.codepipeline-bucket.bucket
+    location = aws_s3_bucket.codepipeline_bucket.bucket
     type     = "S3"
   }
 
@@ -555,7 +568,7 @@ resource "aws_codepipeline" "codepipeline" {
       version          = "1"
 
       configuration = {
-        ProjectName = format("%s-%s-codepipeline-project", local.Environment, local.Name)
+        ProjectName = format("%s_%s_codepipeline_project", local.Environment, local.Name)
       }
     }
   }
@@ -580,23 +593,23 @@ resource "aws_codepipeline" "codepipeline" {
 }
 
 resource "aws_codestarconnections_connection" "app" {
-  name          = format("%s-%s-codestarconnections", local.Environment, local.Name)
+  name          = format("%s_%s_codestarconnections", local.Environment, local.Name)
   provider_type = "GitHub"
 }
 
-resource "aws_s3_bucket" "codepipeline-bucket" {
-  bucket = format("%s-%s-codepipeline-bucket", local.Environment, local.Name)
+resource "aws_s3_bucket" "codepipeline_bucket" {
+  bucket = format("%s_%s_codepipeline_bucket", local.Environment, local.Name)
 }
 
-resource "aws_s3_bucket_acl" "codepipeline-bucket_acl" {
-  bucket = aws_s3_bucket.codepipeline-bucket.id
+resource "aws_s3_bucket_acl" "codepipeline_bucket_acl" {
+  bucket = aws_s3_bucket.codepipeline_bucket.id
   acl    = "private"
 }
 
 
 
 resource "aws_iam_role" "codepipeline_role" {
-  name = format("%s-%s-app-codepipeline-role", local.Environment, local.Name)
+  name = format("%s_%s_app_codepipeline_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -616,7 +629,7 @@ EOF
 
 
 resource "aws_iam_role_policy" "codepipeline_policy" {
-  name = format("%s-%s-app-codepipeline-policy", local.Environment, local.Name)
+  name = format("%s_%s_app_codepipeline_policy", local.Environment, local.Name)
   role = aws_iam_role.codepipeline_role.id
 
   policy = <<EOF
@@ -768,8 +781,6 @@ module "route53-record" {
 }
 
 
-
-
 module "appvpn_route53-record" {
   allow_overwrite = true
   source          = "clouddrove/route53-record/aws"
@@ -782,4 +793,60 @@ module "appvpn_route53-record" {
     zone_id                = local.zone_id_alb
     evaluate_target_health = true
   }
+}
+
+
+
+
+
+
+
+module "zones" {
+  source  = "terraform-aws-modules/route53/aws//modules/zones"
+  version = "~> 2.0"
+
+  zones = {
+    "terraform-aws-modules-example.com" = {
+      comment = "terraform-aws-modules-examples.com (production)"
+      tags = {
+        env = "production"
+      }
+    }
+
+    "myapp.com" = {
+      comment = "myapp.com"
+    }
+  }
+
+  tags = {
+    ManagedBy = "Terraform"
+  }
+}
+
+module "records" {
+  source  = "terraform-aws-modules/route53/aws//modules/records"
+  version = "~> 2.0"
+
+  zone_name = keys(module.zones.route53_zone_zone_id)[0]
+
+  records = [
+    {
+      name = "apigateway1"
+      type = "A"
+      alias = {
+        name    = "d-10qxlbvagl.execute-api.eu-west-1.amazonaws.com"
+        zone_id = "ZLY8HYME6SFAD"
+      }
+    },
+    {
+      name = ""
+      type = "A"
+      ttl  = 3600
+      records = [
+        "10.10.10.10",
+      ]
+    },
+  ]
+
+  depends_on = [module.zones]
 }

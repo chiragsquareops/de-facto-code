@@ -1,4 +1,4 @@
-/* locals {
+locals {
   name                 = "skaf"
   region               = "us-east-2"
   environment          = "production"
@@ -55,4 +55,4 @@ module "redis-sg" {
       cidr_blocks = "0.0.0.0/0"
     }
   ]
-} */
+}

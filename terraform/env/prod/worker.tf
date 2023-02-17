@@ -1,10 +1,15 @@
+# ASG with scaling policies (Queue Based) --> Min Max size to be set as 1 in DEV || Scaling policies in prod
+# CICD --> with Codepipeline
+# S3 buckets --> To store artifacts (IAM Roles)
+# Cloudwatch Alarms --> 
+
+
 module "key_pair_worker_asg" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
   key_name           = format("%s-%s-worker-asg", local.Environment, local.Name)
   ssm_parameter_path = format("%s-%s-worker-asg", local.Environment, local.Name)
 }
-
 
 module "worker-asg-sg" {
   source  = "terraform-aws-modules/security-group/aws"
@@ -105,21 +110,23 @@ resource "aws_autoscaling_policy" "asg_worker_scale_in" {
   policy_type            = "SimpleScaling"
 }
 
-resource "aws_cloudwatch_metric_alarm" "asg_worker_scale_in_alarm" {
+module "worker_metric_scale_in_alarm" {
+  source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
+  version = "~> 3.0"
+
   alarm_name          = "${local.Name}-worker-asg-scale-in-alarm"
-  alarm_description   = "asg-scale-in-cpu-alarm"
+  alarm_description   = "worker-asg-scale-in-ram-alarm"
   comparison_operator = "LessThanOrEqualToThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "SQS"
-  period              = "120"
-  statistic           = "Average"
+  evaluation_periods  = 1
   threshold           = local.worker_threshold_scale_in
-  dimensions = {
-    "AutoScalingGroupName" = module.worker-asg.autoscaling_group_name
-  }
-  actions_enabled = true
-  alarm_actions   = [resource.aws_autoscaling_policy.asg_worker_scale_in.arn]
+  period              = 60
+  unit                = "Count"
+
+  namespace   = "SQS"
+  metric_name = "ApproximateNumberOfMessagesVisible"
+  statistic   = "Average"
+
+  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_scale_in.arn]
 }
 
 resource "aws_autoscaling_policy" "asg_worker_scale_out" {
@@ -131,24 +138,26 @@ resource "aws_autoscaling_policy" "asg_worker_scale_out" {
   policy_type            = "SimpleScaling"
 }
 
-resource "aws_cloudwatch_metric_alarm" "asg_worker_scale_out_alarm" {
-  alarm_name          = "${local.Name}-scale-out-alarm"
-  alarm_description   = "asg-scale-out-cpu-alarm"
+module "worker_metric_scale_out_alarm" {
+  source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
+  version = "~> 3.0"
+
+  alarm_name          = "${local.Name}-worker-asg-scale-out-alarm"
+  alarm_description   = "worker-asg-scale-out-ram-alarm"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "ApproximateNumberOfMessagesVisible"
-  namespace           = "SQS"
-  period              = "120"
-  statistic           = "Average"
+  evaluation_periods  = 1
   threshold           = local.worker_threshold_scale_out
-  dimensions = {
-    "AutoScalingGroupName" = module.worker-asg.autoscaling_group_name
-  }
-  actions_enabled = true
-  alarm_actions   = [resource.aws_autoscaling_policy.asg_worker_scale_out.arn]
+  period              = 60
+  unit                = "Count"
+
+  namespace   = "SQS"
+  metric_name = "ApproximateNumberOfMessagesVisible"
+  statistic   = "Average"
+
+  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_scale_out.arn]
 }
 
-resource "aws_iam_role" "dev-worker-codebuild-role" {
+resource "aws_iam_role" "worker-codebuild-role" {
   name = format("%s-%s-worker-codebuild-role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
@@ -167,8 +176,8 @@ resource "aws_iam_role" "dev-worker-codebuild-role" {
 EOF
 }
 
-resource "aws_iam_role_policy" "dev-worker-codebuild-policy" {
-  role = aws_iam_role.dev-worker-codebuild-role.name
+resource "aws_iam_role_policy" "worker-codebuild-policy" {
+  role = aws_iam_role.worker-codebuild-role.name
 
   policy = <<POLICY
 {
@@ -256,7 +265,7 @@ resource "aws_codebuild_project" "worker" {
   name          = format("%s-%s-worker-codebuild-app", local.Environment, local.Name)
   description   = "worker_codebuild_project"
   build_timeout = "5"
-  service_role  = aws_iam_role.dev-worker-codebuild-role.arn
+  service_role  = aws_iam_role.worker-codebuild-role.arn
 
   artifacts {
     type = "NO_ARTIFACTS"
