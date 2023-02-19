@@ -7,32 +7,25 @@
 module "key_pair_worker_asg" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
-  key_name           = format("%s-%s-worker-asg", local.Environment, local.Name)
-  ssm_parameter_path = format("%s-%s-worker-asg", local.Environment, local.Name)
+  key_name           = format("%s_%s_worker_asg", local.Environment, local.Name)
+  ssm_parameter_path = format("%s_%s_worker_asg", local.Environment, local.Name)
 }
 
-module "worker-asg-sg" {
+module "worker_asg_sg" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
 
-  name        = format("%s-%s-worker-asg-sg", local.Environment, local.Name)
-  description = "asg-sg"
+  name        = format("%s_%s_worker_asg_sg", local.Environment, local.Name)
+  description = "asg_sg"
   vpc_id      = module.vpc.vpc_id
   ingress_with_cidr_blocks = [
     {
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      description = "http port"
-      cidr_blocks = "0.0.0.0/0"
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      description     = "VPN port"
+      security_groups = module.vpc.vpn_security_group
     },
-    {
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      description = "https port"
-      cidr_blocks = "0.0.0.0/0"
-    }
   ]
   egress_with_cidr_blocks = [
     {
@@ -45,10 +38,10 @@ module "worker-asg-sg" {
   ]
 }
 
-module "worker-asg" {
+module "worker_asg" {
   source  = "terraform-aws-modules/autoscaling/aws"
   version = "6.7.0"
-  name    = format("%s-%s-worker-asg", local.Environment, local.Name)
+  name    = format("%s_%s_worker_asg", local.Environment, local.Name)
 
   min_size                  = 0
   max_size                  = 1
@@ -71,22 +64,22 @@ module "worker-asg" {
   }
 
 
-  launch_template_name        = format("%s-%s-worker-lt", local.Environment, local.Name)
-  launch_template_description = "Launch template for worker-app"
+  launch_template_name        = format("%s_%s_worker_lt", local.Environment, local.Name)
+  launch_template_description = "Launch template for worker_app"
   update_default_version      = true
 
   image_id          = "ami-07388f7062e8065a9"
   instance_type     = "t3a.micro"
-  key_name          = module.key_pair_asg.key_pair_name
+  key_name          = module.key_pair_worker_asg.key_pair_name
   ebs_optimized     = false
   enable_monitoring = false
-  security_groups   = [module.asg-sg.security_group_id]
+  security_groups   = [module.worker_asg_sg.security_group_id]
   user_data         = base64encode(local.user_data)
 
   create_iam_instance_profile = true
-  iam_role_name               = format("%s-%s-worker-instance-role", local.Environment, local.Name)
+  iam_role_name               = format("%s_%s_worker_instance_role", local.Environment, local.Name)
   iam_role_path               = "/ec2/"
-  iam_role_description        = "IAM role for worker-instances"
+  iam_role_description        = "IAM role for worker_instances"
   iam_role_tags = {
     CustomIamRole = "Yes"
   }
@@ -102,8 +95,8 @@ module "worker-asg" {
 
 
 resource "aws_autoscaling_policy" "asg_worker_scale_in" {
-  name                   = "${local.Name}-scale-in-policy"
-  autoscaling_group_name = module.worker-asg.autoscaling_group_name
+  name                   = "${local.Name}_scale_in_policy"
+  autoscaling_group_name = module.worker_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "-1"
   cooldown               = "300"
@@ -114,8 +107,8 @@ module "worker_metric_scale_in_alarm" {
   source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
   version = "~> 3.0"
 
-  alarm_name          = "${local.Name}-worker-asg-scale-in-alarm"
-  alarm_description   = "worker-asg-scale-in-ram-alarm"
+  alarm_name          = "${local.Name}_worker_asg_scale_in_alarm"
+  alarm_description   = "worker_asg_scale_in_ram_alarm"
   comparison_operator = "LessThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = local.worker_threshold_scale_in
@@ -130,8 +123,8 @@ module "worker_metric_scale_in_alarm" {
 }
 
 resource "aws_autoscaling_policy" "asg_worker_scale_out" {
-  name                   = "${local.Name}-scale-out-policy"
-  autoscaling_group_name = module.worker-asg.autoscaling_group_name
+  name                   = "${local.Name}_scale_out_policy"
+  autoscaling_group_name = module.worker_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "1"
   cooldown               = "300"
@@ -142,8 +135,8 @@ module "worker_metric_scale_out_alarm" {
   source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
   version = "~> 3.0"
 
-  alarm_name          = "${local.Name}-worker-asg-scale-out-alarm"
-  alarm_description   = "worker-asg-scale-out-ram-alarm"
+  alarm_name          = "${local.Name}_worker_asg_scale_out_alarm"
+  alarm_description   = "worker_asg_scale_out_ram_alarm"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = local.worker_threshold_scale_out
@@ -157,8 +150,8 @@ module "worker_metric_scale_out_alarm" {
   alarm_actions = [resource.aws_autoscaling_policy.asg_worker_scale_out.arn]
 }
 
-resource "aws_iam_role" "worker-codebuild-role" {
-  name = format("%s-%s-worker-codebuild-role", local.Environment, local.Name)
+resource "aws_iam_role" "worker_codebuild_role" {
+  name = format("%s_%s_worker_codebuild_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -176,8 +169,8 @@ resource "aws_iam_role" "worker-codebuild-role" {
 EOF
 }
 
-resource "aws_iam_role_policy" "worker-codebuild-policy" {
-  role = aws_iam_role.worker-codebuild-role.name
+resource "aws_iam_role_policy" "worker_codebuild_policy" {
+  role = aws_iam_role.worker_codebuild_role.name
 
   policy = <<POLICY
 {
@@ -262,10 +255,10 @@ POLICY
 }
 
 resource "aws_codebuild_project" "worker" {
-  name          = format("%s-%s-worker-codebuild-app", local.Environment, local.Name)
+  name          = format("%s_%s_worker_codebuild_app", local.Environment, local.Name)
   description   = "worker_codebuild_project"
   build_timeout = "5"
-  service_role  = aws_iam_role.worker-codebuild-role.arn
+  service_role  = aws_iam_role.worker_codebuild_role.arn
 
   artifacts {
     type = "NO_ARTIFACTS"
@@ -298,17 +291,17 @@ resource "aws_codebuild_project" "worker" {
 
 resource "aws_codedeploy_app" "worker" {
   compute_platform = local.compute_platform
-  name             = format("%s-%s-worker-codedeploy-app", local.Environment, local.Name)
+  name             = format("%s_%s_worker_codedeploy_app", local.Environment, local.Name)
 }
 
-resource "aws_codedeploy_deployment_group" "worker-deploy-group" {
+resource "aws_codedeploy_deployment_group" "worker_deploy_group" {
   app_name              = resource.aws_codedeploy_app.worker.name
   deployment_group_name = aws_codedeploy_app.worker.name
   service_role_arn      = resource.aws_iam_role.worker_codedeploy_role.arn
-  autoscaling_groups    = [module.worker-asg.autoscaling_group_name]
+  autoscaling_groups    = [module.worker_asg.autoscaling_group_name]
 }
 resource "aws_iam_role" "worker_codedeploy_role" {
-  name = format("%s-%s-worker-codedeploy-role", local.Environment, local.Name)
+  name = format("%s_%s_worker_codedeploy_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -327,8 +320,31 @@ resource "aws_iam_role" "worker_codedeploy_role" {
 EOF
 }
 
+module "iam_policy" {
+  source = "terraform-aws-modules/iam/aws//modules/iam-policy"
+
+  name        = "example"
+  path        = "/"
+  description = "My example policy"
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "ec2:Describe*"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+}
+
 resource "aws_iam_role_policy" "worker_codedeploy_policy" {
-  name = format("%s-%s-worker-codedeploy-policy", local.Environment, local.Name)
+  name = format("%s_%s_worker_codedeploy_policy", local.Environment, local.Name)
   role = aws_iam_role.worker_codedeploy_role.id
 
   policy = <<EOF
@@ -402,11 +418,11 @@ EOF
 }
 
 resource "aws_codepipeline" "worker_codepipeline" {
-  name     = format("%s-%s-worker-codepipeline", local.Environment, local.Name)
+  name     = format("%s_%s_worker_codepipeline", local.Environment, local.Name)
   role_arn = aws_iam_role.worker_codepipeline_role.arn
 
   artifact_store {
-    location = aws_s3_bucket.codepipeline-worker-bucket.bucket
+    location = aws_s3_bucket.codepipeline_worker_bucket.bucket
     type     = "S3"
   }
 
@@ -442,7 +458,7 @@ resource "aws_codepipeline" "worker_codepipeline" {
       version          = "1"
 
       configuration = {
-        ProjectName = format("%s-%s-codepipeline-project", local.Environment, local.Name)
+        ProjectName = format("%s_%s_codepipeline_project", local.Environment, local.Name)
       }
     }
   }
@@ -460,30 +476,30 @@ resource "aws_codepipeline" "worker_codepipeline" {
 
       configuration = {
         ApplicationName     = resource.aws_codedeploy_app.app.name
-        DeploymentGroupName = resource.aws_codedeploy_deployment_group.app-deploy-group.deployment_group_name
+        DeploymentGroupName = resource.aws_codedeploy_deployment_group.app_deploy_group.deployment_group_name
       }
     }
   }
 }
 
 resource "aws_codestarconnections_connection" "worker" {
-  name          = format("%s-%s-codestarconnections", local.Environment, local.Name)
+  name          = format("%s_%s_codestarconnections", local.Environment, local.Name)
   provider_type = "GitHub"
 }
 
-resource "aws_s3_bucket" "codepipeline-worker-bucket" {
-  bucket = format("%s-%s-codepipeline-worker-bucket", local.Environment, local.Name)
+resource "aws_s3_bucket" "codepipeline_worker_bucket" {
+  bucket = format("%s_%s_codepipeline_worker_bucket", local.Environment, local.Name)
 }
 
-resource "aws_s3_bucket_acl" "codepipeline-worker-bucket_acl" {
-  bucket = aws_s3_bucket.codepipeline-worker-bucket.id
+resource "aws_s3_bucket_acl" "codepipeline_worker_bucket_acl" {
+  bucket = aws_s3_bucket.codepipeline_worker_bucket.id
   acl    = "private"
 }
 
 
 
 resource "aws_iam_role" "worker_codepipeline_role" {
-  name = format("%s-%s-worker-codepipeline-role", local.Environment, local.Name)
+  name = format("%s_%s_worker_codepipeline_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -503,7 +519,7 @@ EOF
 
 
 resource "aws_iam_role_policy" "codepipeline_worker_policy" {
-  name = format("%s-%s-worker-codepipeline-policy", local.Environment, local.Name)
+  name = format("%s_%s_worker_codepipeline_policy", local.Environment, local.Name)
   role = aws_iam_role.worker_codepipeline_role.id
 
   policy = <<EOF
@@ -520,8 +536,8 @@ resource "aws_iam_role_policy" "codepipeline_worker_policy" {
         "s3:PutObject"
       ],
       "Resource": [
-        "${aws_s3_bucket.codepipeline-worker-bucket.arn}",
-        "${aws_s3_bucket.codepipeline-worker-bucket.arn}/*"
+        "${aws_s3_bucket.codepipeline_worker_bucket.arn}",
+        "${aws_s3_bucket.codepipeline_worker_bucket.arn}/*"
       ]
     },
     {

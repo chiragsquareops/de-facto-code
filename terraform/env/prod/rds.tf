@@ -9,9 +9,10 @@ module "aurora_mysql" {
   engine_mode       = "serverless"
   storage_encrypted = true
 
-  vpc_id                = module.vpc.vpc_id
-  subnets               = module.vpc.database_subnets
-  create_security_group = true
+  vpc_id                  = module.vpc.vpc_id
+  subnets                 = module.vpc.database_subnets
+  create_security_group   = false
+  allowed_security_groups = []
 
   monitoring_interval = 60
 
@@ -48,4 +49,38 @@ resource "aws_rds_cluster_parameter_group" "aurora_db_mysql" {
     Environment = local.Environment
     Name        = local.Name
   }
+}
+
+module "rds-sg" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "~> 4.13"
+
+  name        = format("%s-%s-rds-sg", local.Environment, local.Name)
+  description = "Security group for Application Instances"
+  vpc_id      = module.vpc.vpc_id
+  ingress_with_cidr_blocks = [
+    {
+      from_port       = 3306
+      to_port         = 3306
+      protocol        = "tcp"
+      description     = "RDS port"
+      security_groups = module.app_asg_sg.security_group_id
+    },
+    {
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      description     = "VPN port"
+      security_groups = module.vpc.vpn_security_group
+    },
+  ]
+  egress_with_cidr_blocks = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      description = "outbound rule"
+      cidr_blocks = "0.0.0.0/0"
+    }
+  ]
 }

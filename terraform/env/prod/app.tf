@@ -11,8 +11,8 @@
 module "key_pair_app" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
-  key_name           = format("%s-%s-asg", local.Environment, local.Name)
-  ssm_parameter_path = format("%s-%s-asg", local.Environment, local.Name)
+  key_name           = format("%s_%s_asg", local.Environment, local.Name)
+  ssm_parameter_path = format("%s_%s_asg", local.Environment, local.Name)
 }
 
 module "s3_bucket_alb_access_logs" {
@@ -35,11 +35,18 @@ module "app_asg_sg" {
   vpc_id      = module.vpc.vpc_id
   ingress_with_cidr_blocks = [
     {
-      from_port   = 8000
-      to_port     = 8000
-      protocol    = "tcp"
-      description = "https port"
-      cidr_blocks = "0.0.0.0/0"
+      from_port       = 8000
+      to_port         = 8000
+      protocol        = "tcp"
+      description     = "https port"
+      security_groups = module.alb-sg.security_group_id
+    },
+    {
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      description     = "VPN port"
+      security_groups = module.vpc.vpn_security_group
     },
   ]
   egress_with_cidr_blocks = [
@@ -85,14 +92,14 @@ module "app_asg" {
 
   image_id          = local.app_image_id
   instance_type     = local.instance_type
-  key_name          = module.key_pair_asg.key_pair_name
+  key_name          = module.key_pair_app.key_pair_name
   ebs_optimized     = false
   enable_monitoring = false
-  security_groups   = [module.asg-sg.security_group_id]
+  security_groups   = [module.app_asg_sg.security_group_id]
   user_data         = base64encode(local.user_data)
 
   create_iam_instance_profile = true
-  iam_role_name               = format("%s_%s_instance-role", local.Environment, local.Name)
+  iam_role_name               = format("%s_%s_instance_role", local.Environment, local.Name)
   iam_role_path               = "/ec2/"
   iam_role_description        = "IAM role for application"
   iam_role_tags = {
@@ -193,7 +200,7 @@ module "ram_metric_scale_in_alarm" {
 module "alb" {
   source             = "terraform-aws-modules/alb/aws"
   version            = "8.2.1"
-  name               = format("%s_%s_alb", local.Environment, local.Name)
+  name               = format("%s-%s-alb", local.Environment, local.Name)
   load_balancer_type = "application"
   vpc_id             = module.vpc.vpc_id
   subnets            = [element(module.vpc.public_subnets, 0), element(module.vpc.public_subnets, 1)]
@@ -205,7 +212,7 @@ module "alb" {
 
   target_groups = [
     {
-      name             = format("%s_%s_TG", local.Environment, local.Name)
+      name             = format("%s-%s-TG", local.Environment, local.Name)
       backend_protocol = "HTTP"
       backend_port     = 8000
       target_type      = "instance"
@@ -226,7 +233,7 @@ module "alb" {
     {
       port               = 443
       protocol           = "HTTPS"
-      certificate_arn    = "arn:aws:acm:us-east-1:309017165673:certificate/721e3538-6f1a-4564-bc94-fb90b0b0d84d"
+      certificate_arn    = module.acm.acm_certificate_arn
       target_group_index = 0
     }
   ]
@@ -391,7 +398,7 @@ resource "aws_codebuild_project" "app" {
   name          = format("%s_%s_laravel_codebuild_app", local.Environment, local.Name)
   description   = "App_codebuild_project"
   build_timeout = "5"
-  service_role  = aws_iam_role.codebuild-app-role.arn
+  service_role  = aws_iam_role.codebuild_app_role.arn
 
   artifacts {
     type = "NO_ARTIFACTS"
@@ -532,7 +539,7 @@ resource "aws_codepipeline" "codepipeline" {
   role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {
-    location = aws_s3_bucket.codepipeline_bucket.bucket
+    location = aws_s3_bucket.codepipeline-bucket.bucket
     type     = "S3"
   }
 
@@ -586,7 +593,7 @@ resource "aws_codepipeline" "codepipeline" {
 
       configuration = {
         ApplicationName     = resource.aws_codedeploy_app.app.name
-        DeploymentGroupName = resource.aws_codedeploy_deployment_group.app-deploy-group.deployment_group_name
+        DeploymentGroupName = resource.aws_codedeploy_deployment_group.app_deploy_group.deployment_group_name
       }
     }
   }
@@ -597,12 +604,12 @@ resource "aws_codestarconnections_connection" "app" {
   provider_type = "GitHub"
 }
 
-resource "aws_s3_bucket" "codepipeline_bucket" {
-  bucket = format("%s_%s_codepipeline_bucket", local.Environment, local.Name)
+resource "aws_s3_bucket" "codepipeline-bucket" {
+  bucket = format("%s-%s-codepipeline-bucket", local.Environment, local.Name)
 }
 
-resource "aws_s3_bucket_acl" "codepipeline_bucket_acl" {
-  bucket = aws_s3_bucket.codepipeline_bucket.id
+resource "aws_s3_bucket_acl" "codepipeline-bucket-acl" {
+  bucket = aws_s3_bucket.codepipeline-bucket.id
   acl    = "private"
 }
 
@@ -765,88 +772,41 @@ module "acm" {
   }
 }
 
-
-module "route53-record" {
-  allow_overwrite = true
-  source          = "clouddrove/route53-record/aws"
-  version         = "1.0.1"
-  zone_id         = local.zone_id
-  name            = "${local.Name}.${local.domain_name}"
-  type            = "A"
-  alias = {
-    name                   = module.alb.lb_dns_name
-    zone_id                = local.zone_id_alb
-    evaluate_target_health = true
-  }
-}
-
-
-module "appvpn_route53-record" {
-  allow_overwrite = true
-  source          = "clouddrove/route53-record/aws"
-  version         = "1.0.1"
-  zone_id         = local.zone_id
-  name            = local.host_headers
-  type            = "A"
-  alias = {
-    name                   = module.alb.lb_dns_name
-    zone_id                = local.zone_id_alb
-    evaluate_target_health = true
-  }
-}
-
-
-
-
-
-
-
-module "zones" {
-  source  = "terraform-aws-modules/route53/aws//modules/zones"
-  version = "~> 2.0"
-
-  zones = {
-    "terraform-aws-modules-example.com" = {
-      comment = "terraform-aws-modules-examples.com (production)"
-      tags = {
-        env = "production"
-      }
-    }
-
-    "myapp.com" = {
-      comment = "myapp.com"
-    }
-  }
-
-  tags = {
-    ManagedBy = "Terraform"
-  }
-}
-
-module "records" {
+module "app_instance_records" {
   source  = "terraform-aws-modules/route53/aws//modules/records"
   version = "~> 2.0"
 
-  zone_name = keys(module.zones.route53_zone_zone_id)[0]
+  zone_id = local.zone_id
 
   records = [
     {
-      name = "apigateway1"
+      name = "${local.Name}.${local.domain_name}"
       type = "A"
       alias = {
-        name    = "d-10qxlbvagl.execute-api.eu-west-1.amazonaws.com"
-        zone_id = "ZLY8HYME6SFAD"
+        name                   = module.alb.lb_dns_name
+        zone_id                = local.zone_id_alb
+        evaluate_target_health = true
       }
     },
+  ]
+}
+
+
+module "vpn_records" {
+  source  = "terraform-aws-modules/route53/aws//modules/records"
+  version = "~> 2.0"
+
+  zone_id = local.zone_id
+
+  records = [
     {
-      name = ""
+      name = local.host_headers
       type = "A"
-      ttl  = 3600
-      records = [
-        "10.10.10.10",
-      ]
+      alias = {
+        name                   = module.alb.lb_dns_name
+        zone_id                = local.zone_id_alb
+        evaluate_target_health = true
+      }
     },
   ]
-
-  depends_on = [module.zones]
 }
