@@ -30,25 +30,28 @@ module "app_asg_sg" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
 
-  name        = format("%s_%s_sg", local.Environment, local.Name)
+  name        = format("%s_%s_app_asg_sg", local.Environment, local.Name)
   description = "Security group for Application Instances"
   vpc_id      = module.vpc.vpc_id
-  ingress_with_cidr_blocks = [
+
+  computed_ingress_with_source_security_group_id = [
     {
-      from_port       = 8000
-      to_port         = 8000
-      protocol        = "tcp"
-      description     = "https port"
-      security_groups = module.alb-sg.security_group_id
+      from_port                = 8000
+      to_port                  = 8000
+      protocol                 = "tcp"
+      description              = "ALB Port"
+      source_security_group_id = module.alb-sg.security_group_id
     },
     {
-      from_port       = 22
-      to_port         = 22
-      protocol        = "tcp"
-      description     = "VPN port"
-      security_groups = module.vpc.vpn_security_group
+      from_port                = 22
+      to_port                  = 22
+      protocol                 = "tcp"
+      description              = "VPN Port"
+      source_security_group_id = module.vpc.vpn_security_group
     },
   ]
+
+  number_of_computed_ingress_with_source_security_group_id = 2
   egress_with_cidr_blocks = [
     {
       from_port   = 0
@@ -70,7 +73,7 @@ module "app_asg" {
   desired_capacity          = 1
   wait_for_capacity_timeout = 0
   health_check_type         = "EC2"
-  vpc_zone_identifier       = [module.vpc.public_subnets[0]]
+  vpc_zone_identifier       = [element(module.vpc.private_subnets, 0), element(module.vpc.private_subnets, 1)]
   target_group_arns         = [module.alb.target_group_arns[0]]
   enabled_metrics           = ["GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity", "GroupInServiceInstances", "GroupPendingInstances", "GroupStandbyInstances", "GroupTerminatingInstances", "GroupTotalInstances"]
 
@@ -96,7 +99,7 @@ module "app_asg" {
   ebs_optimized     = false
   enable_monitoring = false
   security_groups   = [module.app_asg_sg.security_group_id]
-  user_data         = base64encode(local.user_data)
+  user_data         = base64encode(local.user_data_app)
 
   create_iam_instance_profile = true
   iam_role_name               = format("%s_%s_instance_role", local.Environment, local.Name)
@@ -233,7 +236,7 @@ module "alb" {
     {
       port               = 443
       protocol           = "HTTPS"
-      certificate_arn    = module.acm.acm_certificate_arn
+      certificate_arn    = "arn:aws:acm:us-east-1:309017165673:certificate/721e3538-6f1a-4564-bc94-fb90b0b0d84d"
       target_group_index = 0
     }
   ]
@@ -314,88 +317,77 @@ resource "aws_iam_role_policy" "codebuild_app_policy" {
 
   policy = <<POLICY
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:logs:us-east-1:421320058418:log-group:/aws/codebuild/${local.Name}",
-                "arn:aws:logs:us-east-1:421320058418:log-group:/aws/codebuild/${local.Name}:*"
-            ],
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::codepipeline-us-east-1-*"
-            ],
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:GetBucketAcl",
-                "s3:GetBucketLocation"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "codebuild:CreateReportGroup",
-                "codebuild:CreateReport",
-                "codebuild:UpdateReport",
-                "codebuild:BatchPutTestCases",
-                "codebuild:BatchPutCodeCoverages"
-            ],
-            "Resource": [
-                "arn:aws:codebuild:us-east-1:421320058418:report-group/${local.Name}-*"
-            ]
-        },
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "secretsmanager:ListSecrets",
-                "secretsmanager:GetSecretValue"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "VisualEditor1",
-            "Effect": "Allow",
-            "Action": "secretsmanager:*",
-            "Resource": "arn:aws:secretsmanager:us-east-1:421320058418:secret:/laravel-app/"
-        },
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:logs:us-east-1:421320058418:log-group:${local.group_name}",
-                "arn:aws:logs:us-east-1:421320058418:log-group:${local.group_name}:*"
-            ],
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ]
-        },
-	{
-            "Effect": "Allow",
-            "Action": [
-                "s3:*",
-                "s3-object-lambda:*"
-            ],
-            "Resource": "*"
-        }
-    ]
+	"Version": "2012-10-17",
+	"Statement": [{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"logs:CreateLogGroup",
+				"logs:CreateLogStream",
+				"logs:PutLogEvents"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"s3:PutObject",
+				"s3:GetObject",
+				"s3:GetObjectVersion",
+				"s3:GetBucketAcl",
+				"s3:GetBucketLocation"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"codebuild:CreateReportGroup",
+				"codebuild:CreateReport",
+				"codebuild:UpdateReport",
+				"codebuild:BatchPutTestCases",
+				"codebuild:BatchPutCodeCoverages"
+			],
+			"Resource": "*"
+		},
+		{
+			"Sid": "VisualEditor0",
+			"Effect": "Allow",
+			"Action": [
+				"secretsmanager:ListSecrets",
+				"secretsmanager:GetSecretValue"
+			],
+			"Resource": "*"
+		},
+		{
+			"Sid": "VisualEditor1",
+			"Effect": "Allow",
+			"Action": "secretsmanager:*",
+			"Resource": "arn:aws:secretsmanager:us-east-1:421320058418:secret:/laravel-app/"
+		},
+		{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"logs:CreateLogGroup",
+				"logs:CreateLogStream",
+				"logs:PutLogEvents"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"s3:*",
+				"s3-object-lambda:*"
+			],
+			"Resource": "*"
+		}
+	]
 }
 POLICY
 }
 
 resource "aws_codebuild_project" "app" {
-  name          = format("%s_%s_laravel_codebuild_app", local.Environment, local.Name)
+  name          = format("%s_%s_codebuild_app", local.Environment, local.Name)
   description   = "App_codebuild_project"
   build_timeout = "5"
   service_role  = aws_iam_role.codebuild_app_role.arn
@@ -431,7 +423,7 @@ resource "aws_codebuild_project" "app" {
 
 resource "aws_codedeploy_app" "app" {
   compute_platform = local.compute_platform
-  name             = format("%s_%s_laravel_codedeploy_app", local.Environment, local.Name)
+  name             = format("%s_%s_codedeploy_app", local.Environment, local.Name)
 }
 
 resource "aws_codedeploy_deployment_group" "app_deploy_group" {
@@ -535,7 +527,7 @@ EOF
 }
 
 resource "aws_codepipeline" "codepipeline" {
-  name     = format("%s_%s_laravel_codepipeline", local.Environment, local.Name)
+  name     = format("%s_%s__codepipeline", local.Environment, local.Name)
   role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {
@@ -759,9 +751,8 @@ module "acm" {
   zone_id     = local.zone_id
 
   subject_alternative_names = [
-    "*.${local.domain_name}",
     "${local.Name}.${local.domain_name}",
-    "${local.host_headers}",
+    "${local.vpn_name}.${local.domain_name}",
   ]
 
   wait_for_validation = true
@@ -780,11 +771,11 @@ module "app_instance_records" {
 
   records = [
     {
-      name = "${local.Name}.${local.domain_name}"
+      name = "${local.Name}"
       type = "A"
       alias = {
         name                   = module.alb.lb_dns_name
-        zone_id                = local.zone_id_alb
+        zone_id                = module.alb.lb_zone_id
         evaluate_target_health = true
       }
     },
@@ -792,21 +783,10 @@ module "app_instance_records" {
 }
 
 
-module "vpn_records" {
-  source  = "terraform-aws-modules/route53/aws//modules/records"
-  version = "~> 2.0"
-
+resource "aws_route53_record" "vpn" {
   zone_id = local.zone_id
-
-  records = [
-    {
-      name = local.host_headers
-      type = "A"
-      alias = {
-        name                   = module.alb.lb_dns_name
-        zone_id                = local.zone_id_alb
-        evaluate_target_health = true
-      }
-    },
-  ]
+  name    = local.host_headers
+  type    = "A"
+  ttl     = 300
+  records = [module.vpc.vpn_host_public_ip]
 }

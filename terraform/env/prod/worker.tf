@@ -18,15 +18,16 @@ module "worker_asg_sg" {
   name        = format("%s_%s_worker_asg_sg", local.Environment, local.Name)
   description = "asg_sg"
   vpc_id      = module.vpc.vpc_id
-  ingress_with_cidr_blocks = [
+  computed_ingress_with_source_security_group_id = [
     {
-      from_port       = 22
-      to_port         = 22
-      protocol        = "tcp"
-      description     = "VPN port"
-      security_groups = module.vpc.vpn_security_group
+      from_port                = 22
+      to_port                  = 22
+      protocol                 = "tcp"
+      description              = "VPN Port"
+      source_security_group_id = module.vpc.vpn_security_group
     },
   ]
+  number_of_computed_ingress_with_source_security_group_id = 1
   egress_with_cidr_blocks = [
     {
       from_port   = 0
@@ -48,8 +49,7 @@ module "worker_asg" {
   desired_capacity          = 1
   wait_for_capacity_timeout = 0
   health_check_type         = "EC2"
-  vpc_zone_identifier       = [module.vpc.public_subnets[0]]
-  target_group_arns         = [module.alb.target_group_arns[0]]
+  vpc_zone_identifier       = [element(module.vpc.private_subnets, 0), element(module.vpc.private_subnets, 1)]
   enabled_metrics           = ["GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity", "GroupInServiceInstances", "GroupPendingInstances", "GroupStandbyInstances", "GroupTerminatingInstances", "GroupTotalInstances"]
 
   instance_refresh = {
@@ -68,13 +68,13 @@ module "worker_asg" {
   launch_template_description = "Launch template for worker_app"
   update_default_version      = true
 
-  image_id          = "ami-07388f7062e8065a9"
-  instance_type     = "t3a.micro"
+  image_id          = local.worker_image_id
+  instance_type     = local.instance_type
   key_name          = module.key_pair_worker_asg.key_pair_name
   ebs_optimized     = false
   enable_monitoring = false
   security_groups   = [module.worker_asg_sg.security_group_id]
-  user_data         = base64encode(local.user_data)
+  user_data         = base64encode(local.user_data_worker)
 
   create_iam_instance_profile = true
   iam_role_name               = format("%s_%s_worker_instance_role", local.Environment, local.Name)
@@ -95,7 +95,7 @@ module "worker_asg" {
 
 
 resource "aws_autoscaling_policy" "asg_worker_scale_in" {
-  name                   = "${local.Name}_scale_in_policy"
+  name                   = "${local.Name}_worker_scale_in_policy"
   autoscaling_group_name = module.worker_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "-1"
@@ -123,7 +123,7 @@ module "worker_metric_scale_in_alarm" {
 }
 
 resource "aws_autoscaling_policy" "asg_worker_scale_out" {
-  name                   = "${local.Name}_scale_out_policy"
+  name                   = "${local.Name}_worker_scale_out_policy"
   autoscaling_group_name = module.worker_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "1"
@@ -422,7 +422,7 @@ resource "aws_codepipeline" "worker_codepipeline" {
   role_arn = aws_iam_role.worker_codepipeline_role.arn
 
   artifact_store {
-    location = aws_s3_bucket.codepipeline_worker_bucket.bucket
+    location = aws_s3_bucket.codepipeline-worker-bucket.bucket
     type     = "S3"
   }
 
@@ -487,12 +487,12 @@ resource "aws_codestarconnections_connection" "worker" {
   provider_type = "GitHub"
 }
 
-resource "aws_s3_bucket" "codepipeline_worker_bucket" {
-  bucket = format("%s_%s_codepipeline_worker_bucket", local.Environment, local.Name)
+resource "aws_s3_bucket" "codepipeline-worker-bucket" {
+  bucket = format("%s-%s-codepipeline-worker-bucket", local.Environment, local.Name)
 }
 
-resource "aws_s3_bucket_acl" "codepipeline_worker_bucket_acl" {
-  bucket = aws_s3_bucket.codepipeline_worker_bucket.id
+resource "aws_s3_bucket_acl" "codepipeline-worker-bucket-acl" {
+  bucket = aws_s3_bucket.codepipeline-worker-bucket.id
   acl    = "private"
 }
 
@@ -536,8 +536,8 @@ resource "aws_iam_role_policy" "codepipeline_worker_policy" {
         "s3:PutObject"
       ],
       "Resource": [
-        "${aws_s3_bucket.codepipeline_worker_bucket.arn}",
-        "${aws_s3_bucket.codepipeline_worker_bucket.arn}/*"
+        "${aws_s3_bucket.codepipeline-worker-bucket.arn}",
+        "${aws_s3_bucket.codepipeline-worker-bucket.arn}/*"
       ]
     },
     {

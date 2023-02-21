@@ -19,7 +19,7 @@ module "vpc" {
   enable_intra_subnet                             = true
   one_nat_gateway_per_az                          = false
   vpn_server_enabled                              = true
-  vpn_server_instance_type                        = "t3a.small"
+  vpn_server_instance_type                        = "t3a.micro"
   vpn_key_pair                                    = module.key_pair_vpn.key_pair_name
   enable_flow_log                                 = false
   flow_log_max_aggregation_interval               = 60

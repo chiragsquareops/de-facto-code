@@ -58,22 +58,23 @@ module "rds-sg" {
   name        = format("%s-%s-rds-sg", local.Environment, local.Name)
   description = "Security group for Application Instances"
   vpc_id      = module.vpc.vpc_id
-  ingress_with_cidr_blocks = [
+    computed_ingress_with_source_security_group_id = [
     {
-      from_port       = 3306
-      to_port         = 3306
-      protocol        = "tcp"
-      description     = "RDS port"
-      security_groups = module.app_asg_sg.security_group_id
+      from_port                = 3306
+      to_port                  = 3306
+      protocol                 = "tcp"
+      description              = "RDS-APP Port"
+      source_security_group_id = module.app_asg_sg.security_group_id
     },
     {
-      from_port       = 22
-      to_port         = 22
-      protocol        = "tcp"
-      description     = "VPN port"
-      security_groups = module.vpc.vpn_security_group
+      from_port                = 22
+      to_port                  = 22
+      protocol                 = "tcp"
+      description              = "VPN Port"
+      source_security_group_id = module.vpc.vpn_security_group
     },
   ]
+  number_of_computed_ingress_with_source_security_group_id = 2
   egress_with_cidr_blocks = [
     {
       from_port   = 0
