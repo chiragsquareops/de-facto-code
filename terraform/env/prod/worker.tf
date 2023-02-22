@@ -7,8 +7,8 @@
 module "key_pair_worker_asg" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
-  key_name           = format("%s_%s_worker_asg", local.Environment, local.Name)
-  ssm_parameter_path = format("%s_%s_worker_asg", local.Environment, local.Name)
+  key_name           = format("%s_%s_worker_asg_kp", local.Environment, local.Name)
+  ssm_parameter_path = format("%s_%s_worker_asg_kp", local.Environment, local.Name)
 }
 
 module "worker_asg_sg" {
@@ -50,7 +50,7 @@ module "worker_asg" {
   wait_for_capacity_timeout = 0
   health_check_type         = "EC2"
   vpc_zone_identifier       = [element(module.vpc.private_subnets, 0), element(module.vpc.private_subnets, 1)]
-  enabled_metrics           = ["GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity", "GroupInServiceInstances", "GroupPendingInstances", "GroupStandbyInstances", "GroupTerminatingInstances", "GroupTotalInstances"]
+  enabled_metrics           = local.enabled_metrics
 
   instance_refresh = {
     strategy = "Rolling"
@@ -84,7 +84,9 @@ module "worker_asg" {
     CustomIamRole = "Yes"
   }
   iam_role_policies = {
-    AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    AmazonEC2RoleforAWSCodeDeploy = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
+    AWSCodeDeployRole             = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
   }
 
   tags = {
@@ -94,8 +96,8 @@ module "worker_asg" {
 }
 
 
-resource "aws_autoscaling_policy" "asg_worker_scale_in" {
-  name                   = "${local.Name}_worker_scale_in_policy"
+resource "aws_autoscaling_policy" "asg_worker_SQS_scale_in_policy" {
+  name                   = "${local.Name}_worker_SQS_scale_in_policy"
   autoscaling_group_name = module.worker_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "-1"
@@ -103,11 +105,11 @@ resource "aws_autoscaling_policy" "asg_worker_scale_in" {
   policy_type            = "SimpleScaling"
 }
 
-module "worker_metric_scale_in_alarm" {
+module "asg_worker_SQS_scale_in_alarm" {
   source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
   version = "~> 3.0"
 
-  alarm_name          = "${local.Name}_worker_asg_scale_in_alarm"
+  alarm_name          = "${local.Name}_asg_worker_SQS_scale_in_alarm"
   alarm_description   = "worker_asg_scale_in_ram_alarm"
   comparison_operator = "LessThanOrEqualToThreshold"
   evaluation_periods  = 1
@@ -119,11 +121,11 @@ module "worker_metric_scale_in_alarm" {
   metric_name = "ApproximateNumberOfMessagesVisible"
   statistic   = "Average"
 
-  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_scale_in.arn]
+  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_SQS_scale_in_policy.arn]
 }
 
-resource "aws_autoscaling_policy" "asg_worker_scale_out" {
-  name                   = "${local.Name}_worker_scale_out_policy"
+resource "aws_autoscaling_policy" "asg_worker_SQS_scale_out_policy" {
+  name                   = "${local.Name}_worker_SQS_scale_out_policy"
   autoscaling_group_name = module.worker_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "1"
@@ -131,12 +133,12 @@ resource "aws_autoscaling_policy" "asg_worker_scale_out" {
   policy_type            = "SimpleScaling"
 }
 
-module "worker_metric_scale_out_alarm" {
+module "asg_worker_SQS_scale_out_alarm" {
   source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
   version = "~> 3.0"
 
-  alarm_name          = "${local.Name}_worker_asg_scale_out_alarm"
-  alarm_description   = "worker_asg_scale_out_ram_alarm"
+  alarm_name          = "${local.Name}_asg_worker_SQS_scale_out_alarm"
+  alarm_description   = "worker_asg_scale_out_SQS_alarm"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = local.worker_threshold_scale_out
@@ -147,7 +149,7 @@ module "worker_metric_scale_out_alarm" {
   metric_name = "ApproximateNumberOfMessagesVisible"
   statistic   = "Average"
 
-  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_scale_out.arn]
+  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_SQS_scale_out_policy.arn]
 }
 
 resource "aws_iam_role" "worker_codebuild_role" {
@@ -174,82 +176,71 @@ resource "aws_iam_role_policy" "worker_codebuild_policy" {
 
   policy = <<POLICY
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:logs:us-east-1:421320058418:log-group:/aws/codebuild/${local.Name}-worker",
-                "arn:aws:logs:us-east-1:421320058418:log-group:/aws/codebuild/${local.Name}-worker:*"
-            ],
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::codepipeline-us-east-1-*"
-            ],
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:GetBucketAcl",
-                "s3:GetBucketLocation"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "codebuild:CreateReportGroup",
-                "codebuild:CreateReport",
-                "codebuild:UpdateReport",
-                "codebuild:BatchPutTestCases",
-                "codebuild:BatchPutCodeCoverages"
-            ],
-            "Resource": [
-                "arn:aws:codebuild:us-east-1:421320058418:report-group/${local.Name}-worker-*"
-            ]
-        },
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "secretsmanager:ListSecrets",
-                "secretsmanager:GetSecretValue"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Sid": "VisualEditor1",
-            "Effect": "Allow",
-            "Action": "secretsmanager:*",
-            "Resource": "arn:aws:secretsmanager:us-east-1:421320058418:secret:/laravel-app/"
-        },
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:logs:us-east-1:421320058418:log-group:${local.group_name}-worker",
-                "arn:aws:logs:us-east-1:421320058418:log-group:${local.group_name}-worker:*"
-            ],
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ]
-        },
-	{
-            "Effect": "Allow",
-            "Action": [
-                "s3:*",
-                "s3-object-lambda:*"
-            ],
-            "Resource": "*"
-        }
-    ]
+	"Version": "2012-10-17",
+	"Statement": [{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"logs:CreateLogGroup",
+				"logs:CreateLogStream",
+				"logs:PutLogEvents"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"s3:PutObject",
+				"s3:GetObject",
+				"s3:GetObjectVersion",
+				"s3:GetBucketAcl",
+				"s3:GetBucketLocation"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"codebuild:CreateReportGroup",
+				"codebuild:CreateReport",
+				"codebuild:UpdateReport",
+				"codebuild:BatchPutTestCases",
+				"codebuild:BatchPutCodeCoverages"
+			],
+			"Resource": "*"
+		},
+		{
+			"Sid": "VisualEditor0",
+			"Effect": "Allow",
+			"Action": [
+				"secretsmanager:ListSecrets",
+				"secretsmanager:GetSecretValue"
+			],
+			"Resource": "*"
+		},
+		{
+			"Sid": "VisualEditor1",
+			"Effect": "Allow",
+			"Action": "secretsmanager:*",
+			"Resource": "arn:aws:secretsmanager:us-east-1:421320058418:secret:/laravel-app/"
+		},
+		{
+			"Effect": "Allow",
+			"Resource": "*",
+			"Action": [
+				"logs:CreateLogGroup",
+				"logs:CreateLogStream",
+				"logs:PutLogEvents"
+			]
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"s3:*",
+				"s3-object-lambda:*"
+			],
+			"Resource": "*"
+		}
+	]
 }
 POLICY
 }
@@ -316,29 +307,6 @@ resource "aws_iam_role" "worker_codedeploy_role" {
             "Action": "sts:AssumeRole"
         }
     ]
-}
-EOF
-}
-
-module "iam_policy" {
-  source = "terraform-aws-modules/iam/aws//modules/iam-policy"
-
-  name        = "example"
-  path        = "/"
-  description = "My example policy"
-
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": [
-        "ec2:Describe*"
-      ],
-      "Effect": "Allow",
-      "Resource": "*"
-    }
-  ]
 }
 EOF
 }
@@ -524,111 +492,105 @@ resource "aws_iam_role_policy" "codepipeline_worker_policy" {
 
   policy = <<EOF
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect":"Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:GetObjectVersion",
-        "s3:GetBucketVersioning",
-        "s3:PutObjectAcl",
-        "s3:PutObject"
-      ],
-      "Resource": [
-        "${aws_s3_bucket.codepipeline-worker-bucket.arn}",
-        "${aws_s3_bucket.codepipeline-worker-bucket.arn}/*"
-      ]
-    },
-    {
-            "Action": [
-                "iam:PassRole"
-            ],
-            "Resource": "*",
-            "Effect": "Allow",
-            "Condition": {
-                "StringEqualsIfExists": {
-                    "iam:PassedToService": [
-                        "cloudformation.amazonaws.com",
-                        "elasticbeanstalk.amazonaws.com",
-                        "ec2.amazonaws.com",
-                        "ecs-tasks.amazonaws.com"
-                    ]
-                }
-            }
-        },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "codestar-connections:UseConnection"
-      ],
-      "Resource": "${aws_codestarconnections_connection.worker.arn}"
-    },
-    {
-            "Action": [
-                "codecommit:CancelUploadArchive",
-                "codecommit:GetBranch",
-                "codecommit:GetCommit",
-                "codecommit:GetRepository",
-                "codecommit:GetUploadArchiveStatus",
-                "codecommit:UploadArchive"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "codebuild:BatchGetBuilds",
-        "codebuild:StartBuild"
-      ],
-      "Resource": "*"
-    },
-    {
-            "Effect": "Allow",
-            "Action": [
-                "devicefarm:ListProjects",
-                "devicefarm:ListDevicePools",
-                "devicefarm:GetRun",
-                "devicefarm:GetUpload",
-                "devicefarm:CreateUpload",
-                "devicefarm:ScheduleRun"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "servicecatalog:ListProvisioningArtifacts",
-                "servicecatalog:CreateProvisioningArtifact",
-                "servicecatalog:DescribeProvisioningArtifact",
-                "servicecatalog:DeleteProvisioningArtifact",
-                "servicecatalog:UpdateProduct"
-            ],
-            "Resource": "*"
-        },
-    {
-      "Action": [
-                "codedeploy:CreateDeployment",
-                "codedeploy:GetApplication",
-                "codedeploy:GetApplicationRevision",
-                "codedeploy:GetDeployment",
-                "codedeploy:GetDeploymentConfig",
-                "codedeploy:RegisterApplicationRevision"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-    },
-    {
-            "Effect": "Allow",
-            "Action": [
-                "appconfig:StartDeployment",
-                "appconfig:StopDeployment",
-                "appconfig:GetDeployment"
-            ],
-            "Resource": "*"
-    }
-  ]
+	"Version": "2012-10-17",
+	"Statement": [{
+			"Effect": "Allow",
+			"Action": [
+				"s3:GetObject",
+				"s3:GetObjectVersion",
+				"s3:GetBucketVersioning",
+				"s3:PutObjectAcl",
+				"s3:PutObject"
+			],
+			"Resource": [
+				"${aws_s3_bucket.codepipeline-worker-bucket.arn}",
+				"${aws_s3_bucket.codepipeline-worker-bucket.arn}/*"
+			]
+		},
+		{
+			"Action": [
+				"iam:PassRole"
+			],
+			"Resource": "*",
+			"Effect": "Allow",
+			"Condition": {
+				"StringEqualsIfExists": {
+					"iam:PassedToService": [
+						"cloudformation.amazonaws.com",
+						"elasticbeanstalk.amazonaws.com",
+						"ec2.amazonaws.com",
+						"ecs-tasks.amazonaws.com"
+					]
+				}
+			}
+		},
+		{
+			"Action": [
+				"codestar-connections:UseConnection"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		},
+		{
+			"Action": [
+				"codecommit:CancelUploadArchive",
+				"codecommit:GetBranch",
+				"codecommit:GetCommit",
+				"codecommit:GetRepository",
+				"codecommit:GetUploadArchiveStatus",
+				"codecommit:UploadArchive"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"codebuild:BatchGetBuilds",
+				"codebuild:StartBuild"
+			],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"devicefarm:ListProjects",
+				"devicefarm:ListDevicePools",
+				"devicefarm:GetRun",
+				"devicefarm:GetUpload",
+				"devicefarm:CreateUpload",
+				"devicefarm:ScheduleRun"
+			],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"servicecatalog:ListProvisioningArtifacts",
+				"servicecatalog:CreateProvisioningArtifact",
+				"servicecatalog:DescribeProvisioningArtifact",
+				"servicecatalog:DeleteProvisioningArtifact",
+				"servicecatalog:UpdateProduct"
+			],
+			"Resource": "*"
+		},
+		{
+			"Action": [
+				"codedeploy:*"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"appconfig:StartDeployment",
+				"appconfig:StopDeployment",
+				"appconfig:GetDeployment"
+			],
+			"Resource": "*"
+		}
+	]
 }
 EOF
 }

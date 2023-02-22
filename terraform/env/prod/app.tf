@@ -11,8 +11,8 @@
 module "key_pair_app" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
-  key_name           = format("%s_%s_asg", local.Environment, local.Name)
-  ssm_parameter_path = format("%s_%s_asg", local.Environment, local.Name)
+  key_name           = format("%s_%s_app_asg_kp", local.Environment, local.Name)
+  ssm_parameter_path = format("%s_%s_app_asg_kp", local.Environment, local.Name)
 }
 
 module "s3_bucket_alb_access_logs" {
@@ -36,11 +36,11 @@ module "app_asg_sg" {
 
   computed_ingress_with_source_security_group_id = [
     {
-      from_port                = 8000
-      to_port                  = 8000
+      from_port                = 80
+      to_port                  = 80
       protocol                 = "tcp"
       description              = "ALB Port"
-      source_security_group_id = module.alb-sg.security_group_id
+      source_security_group_id = module.app_alb_sg.security_group_id
     },
     {
       from_port                = 22
@@ -66,7 +66,7 @@ module "app_asg_sg" {
 module "app_asg" {
   source  = "terraform-aws-modules/autoscaling/aws"
   version = "6.7.0"
-  name    = format("%s_%s_asg", local.Environment, local.Name)
+  name    = format("%s_%s_app_asg", local.Environment, local.Name)
 
   min_size                  = 0
   max_size                  = 1
@@ -75,8 +75,7 @@ module "app_asg" {
   health_check_type         = "EC2"
   vpc_zone_identifier       = [element(module.vpc.private_subnets, 0), element(module.vpc.private_subnets, 1)]
   target_group_arns         = [module.alb.target_group_arns[0]]
-  enabled_metrics           = ["GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity", "GroupInServiceInstances", "GroupPendingInstances", "GroupStandbyInstances", "GroupTerminatingInstances", "GroupTotalInstances"]
-
+  enabled_metrics           = local.enabled_metrics
   instance_refresh = {
     strategy = "Rolling"
     preferences = {
@@ -89,8 +88,8 @@ module "app_asg" {
   }
 
 
-  launch_template_name        = format("%s_%s_lt", local.Environment, local.Name)
-  launch_template_description = "Launch template example"
+  launch_template_name        = format("%s_%s_app_lt", local.Environment, local.Name)
+  launch_template_description = "Launch template for application"
   update_default_version      = true
 
   image_id          = local.app_image_id
@@ -102,14 +101,16 @@ module "app_asg" {
   user_data         = base64encode(local.user_data_app)
 
   create_iam_instance_profile = true
-  iam_role_name               = format("%s_%s_instance_role", local.Environment, local.Name)
+  iam_role_name               = format("%s_%s_app_instance_role", local.Environment, local.Name)
   iam_role_path               = "/ec2/"
   iam_role_description        = "IAM role for application"
   iam_role_tags = {
     CustomIamRole = "Yes"
   }
   iam_role_policies = {
-    AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+    AmazonEC2RoleforAWSCodeDeploy = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
+    AWSCodeDeployRole             = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
   }
 
   tags = {
@@ -143,8 +144,8 @@ module "app_asg" {
 }
 
 
-resource "aws_autoscaling_policy" "RAM_based_scale_out" {
-  name                   = "${local.Name}_asg_RAM_scale_out_policy"
+resource "aws_autoscaling_policy" "app_asg_RAM_based_scale_out_policy" {
+  name                   = "${local.Name}_app_asg_RAM_scale_out_policy"
   autoscaling_group_name = module.app_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "1"
@@ -152,12 +153,12 @@ resource "aws_autoscaling_policy" "RAM_based_scale_out" {
   policy_type            = "SimpleScaling"
 }
 
-module "ram_metric_scale_out_alarm" {
+module "app_asg_ram_scale_out_alarm" {
   source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
   version = "~> 3.0"
 
-  alarm_name          = "${local.Name}_asg_scale_out_alarm"
-  alarm_description   = "asg_scale_out_ram_alarm"
+  alarm_name          = "${local.Name}_app_asg_RAM_scale_out_alarm"
+  alarm_description   = "app_asg_scale_out_ram_alarm"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = local.ram_threshold_to_scale_out
@@ -168,12 +169,12 @@ module "ram_metric_scale_out_alarm" {
   metric_name = "mem_used_percent"
   statistic   = "Average"
 
-  alarm_actions = [aws_autoscaling_policy.RAM_based_scale_out.arn]
+  alarm_actions = [aws_autoscaling_policy.app_asg_RAM_based_scale_out_policy.arn]
 }
 
 
-resource "aws_autoscaling_policy" "RAM_based_scale_in" {
-  name                   = "${local.Name}_asg_RAM_scale_in_policy"
+resource "aws_autoscaling_policy" "app_asg_RAM_based_scale_in_policy" {
+  name                   = "${local.Name}_app_asg_RAM_scale_in_policy"
   autoscaling_group_name = module.app_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = "-1"
@@ -185,8 +186,8 @@ module "ram_metric_scale_in_alarm" {
   source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
   version = "~> 3.0"
 
-  alarm_name          = "${local.Name}_asg_scale_in_alarm"
-  alarm_description   = "asg_scale_in_ram_alarm"
+  alarm_name          = "${local.Name}_app_asg_RAM_scale_in_alarm"
+  alarm_description   = "app_asg_scale_in_ram_alarm"
   comparison_operator = "LessThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = local.ram_threshold_to_scale_in
@@ -197,27 +198,28 @@ module "ram_metric_scale_in_alarm" {
   metric_name = "mem_used_percent"
   statistic   = "Average"
 
-  alarm_actions = [resource.aws_autoscaling_policy.RAM_based_scale_in.arn]
+  alarm_actions = [resource.aws_autoscaling_policy.app_asg_RAM_based_scale_in_policy.arn]
 }
 
 module "alb" {
   source             = "terraform-aws-modules/alb/aws"
   version            = "8.2.1"
-  name               = format("%s-%s-alb", local.Environment, local.Name)
+  name               = format("%s-%s-app-alb", local.Environment, local.Name)
   load_balancer_type = "application"
   vpc_id             = module.vpc.vpc_id
   subnets            = [element(module.vpc.public_subnets, 0), element(module.vpc.public_subnets, 1)]
-  security_groups    = [module.alb-sg.security_group_id]
+  security_groups    = [module.app_alb_sg.security_group_id]
 
   access_logs = {
     bucket = "laravel-access-logs"
+    /* bucket = trim("module.s3_bucket_alb_access_logs.s3_bucket_bucket_domain_name", ".s3.amazonaws.com") */
   }
 
   target_groups = [
     {
       name             = format("%s-%s-TG", local.Environment, local.Name)
       backend_protocol = "HTTP"
-      backend_port     = 8000
+      backend_port     = 80
       target_type      = "instance"
       health_check = {
         enabled             = true
@@ -236,7 +238,7 @@ module "alb" {
     {
       port               = 443
       protocol           = "HTTPS"
-      certificate_arn    = "arn:aws:acm:us-east-1:309017165673:certificate/721e3538-6f1a-4564-bc94-fb90b0b0d84d"
+      certificate_arn    = module.acm.acm_certificate_arn
       target_group_index = 0
     }
   ]
@@ -258,7 +260,7 @@ module "alb" {
   }
 }
 
-module "alb-sg" {
+module "app_alb_sg" {
 
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
@@ -294,7 +296,7 @@ module "alb-sg" {
 }
 
 resource "aws_iam_role" "codebuild_app_role" {
-  name = format("%s_%s_laravel_codebuild_role", local.Environment, local.Name)
+  name = format("%s_%s_app_codebuild_role", local.Environment, local.Name)
 
   assume_role_policy = <<EOF
 {
@@ -453,7 +455,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "codedeploy_policy" {
-  name = format("%s_%s_laravel_codedeploy_policy", local.Environment, local.Name)
+  name = format("%s_%s_app_codedeploy_policy", local.Environment, local.Name)
   role = aws_iam_role.codedeploy_role.id
 
   policy = <<EOF
@@ -527,7 +529,7 @@ EOF
 }
 
 resource "aws_codepipeline" "codepipeline" {
-  name     = format("%s_%s__codepipeline", local.Environment, local.Name)
+  name     = format("%s_%s_codepipeline_app", local.Environment, local.Name)
   role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {
@@ -567,7 +569,7 @@ resource "aws_codepipeline" "codepipeline" {
       version          = "1"
 
       configuration = {
-        ProjectName = format("%s_%s_codepipeline_project", local.Environment, local.Name)
+        ProjectName = format("%s_%s_codebuild_app", local.Environment, local.Name)
       }
     }
   }
@@ -633,115 +635,108 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
 
   policy = <<EOF
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect":"Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:GetObjectVersion",
-        "s3:GetBucketVersioning",
-        "s3:PutObjectAcl",
-        "s3:PutObject"
-      ],
-      "Resource": [
-        "${aws_s3_bucket.codepipeline-bucket.arn}",
-        "${aws_s3_bucket.codepipeline-bucket.arn}/*"
-      ]
-    },
-    {
-            "Action": [
-                "iam:PassRole"
-            ],
-            "Resource": "*",
-            "Effect": "Allow",
-            "Condition": {
-                "StringEqualsIfExists": {
-                    "iam:PassedToService": [
-                        "cloudformation.amazonaws.com",
-                        "elasticbeanstalk.amazonaws.com",
-                        "ec2.amazonaws.com",
-                        "ecs-tasks.amazonaws.com"
-                    ]
-                }
-            }
-        },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "codestar-connections:UseConnection"
-      ],
-      "Resource": "${aws_codestarconnections_connection.app.arn}"
-    },
-    {
-            "Action": [
-                "codecommit:CancelUploadArchive",
-                "codecommit:GetBranch",
-                "codecommit:GetCommit",
-                "codecommit:GetRepository",
-                "codecommit:GetUploadArchiveStatus",
-                "codecommit:UploadArchive"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "codebuild:BatchGetBuilds",
-        "codebuild:StartBuild"
-      ],
-      "Resource": "*"
-    },
-    {
-            "Effect": "Allow",
-            "Action": [
-                "devicefarm:ListProjects",
-                "devicefarm:ListDevicePools",
-                "devicefarm:GetRun",
-                "devicefarm:GetUpload",
-                "devicefarm:CreateUpload",
-                "devicefarm:ScheduleRun"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "servicecatalog:ListProvisioningArtifacts",
-                "servicecatalog:CreateProvisioningArtifact",
-                "servicecatalog:DescribeProvisioningArtifact",
-                "servicecatalog:DeleteProvisioningArtifact",
-                "servicecatalog:UpdateProduct"
-            ],
-            "Resource": "*"
-        },
-    {
-      "Action": [
-                "codedeploy:CreateDeployment",
-                "codedeploy:GetApplication",
-                "codedeploy:GetApplicationRevision",
-                "codedeploy:GetDeployment",
-                "codedeploy:GetDeploymentConfig",
-                "codedeploy:RegisterApplicationRevision"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-    },
-    {
-            "Effect": "Allow",
-            "Action": [
-                "appconfig:StartDeployment",
-                "appconfig:StopDeployment",
-                "appconfig:GetDeployment"
-            ],
-            "Resource": "*"
-    }
-  ]
+	"Version": "2012-10-17",
+	"Statement": [{
+			"Effect": "Allow",
+			"Action": [
+				"s3:GetObject",
+				"s3:GetObjectVersion",
+				"s3:GetBucketVersioning",
+				"s3:PutObjectAcl",
+				"s3:PutObject"
+			],
+			"Resource": [
+				"${aws_s3_bucket.codepipeline-bucket.arn}",
+				"${aws_s3_bucket.codepipeline-bucket.arn}/*"
+			]
+		},
+		{
+			"Action": [
+				"iam:PassRole"
+			],
+			"Resource": "*",
+			"Effect": "Allow",
+			"Condition": {
+				"StringEqualsIfExists": {
+					"iam:PassedToService": [
+						"cloudformation.amazonaws.com",
+						"elasticbeanstalk.amazonaws.com",
+						"ec2.amazonaws.com",
+						"ecs-tasks.amazonaws.com"
+					]
+				}
+			}
+		},
+		{
+			"Action": [
+				"codestar-connections:UseConnection"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		},
+		{
+			"Action": [
+				"codecommit:CancelUploadArchive",
+				"codecommit:GetBranch",
+				"codecommit:GetCommit",
+				"codecommit:GetRepository",
+				"codecommit:GetUploadArchiveStatus",
+				"codecommit:UploadArchive"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"codebuild:BatchGetBuilds",
+				"codebuild:StartBuild"
+			],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"devicefarm:ListProjects",
+				"devicefarm:ListDevicePools",
+				"devicefarm:GetRun",
+				"devicefarm:GetUpload",
+				"devicefarm:CreateUpload",
+				"devicefarm:ScheduleRun"
+			],
+			"Resource": "*"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"servicecatalog:ListProvisioningArtifacts",
+				"servicecatalog:CreateProvisioningArtifact",
+				"servicecatalog:DescribeProvisioningArtifact",
+				"servicecatalog:DeleteProvisioningArtifact",
+				"servicecatalog:UpdateProduct"
+			],
+			"Resource": "*"
+		},
+		{
+			"Action": [
+				"codedeploy:*"
+			],
+			"Resource": "*",
+			"Effect": "Allow"
+		},
+		{
+			"Effect": "Allow",
+			"Action": [
+				"appconfig:StartDeployment",
+				"appconfig:StopDeployment",
+				"appconfig:GetDeployment"
+			],
+			"Resource": "*"
+		}
+	]
 }
 EOF
 }
-
 
 module "acm" {
   source  = "terraform-aws-modules/acm/aws"

@@ -3,10 +3,10 @@ locals {
   Environment                = "prod"
   Name                       = "laravel"
   vpc_cidr                   = "172.10.0.0/16"
-  app_image_id               = "ami-07388f7062e8065a9"
-  worker_image_id            = "ami-092eaed4451c46845"
+  app_image_id               = "ami-0904d9299e1034fa6"
+  worker_image_id            = "ami-0fbfb143e5ab183a3"
   instance_type              = "t3a.micro"
-  image                      = "aws/codebuild/standard:2.0"
+  image                      = "aws/codebuild/standard:5.0"
   type                       = "LINUX_CONTAINER"
   compute_platform           = "Server"
   group_name                 = "laravel"
@@ -20,6 +20,7 @@ locals {
   FullRepositoryId           = "chiragsquareops/HospitalMS"
   BranchName                 = "main"
   pipeline_name              = "laravel-app-pipeline"
+  enabled_metrics            = ["GroupMinSize", "GroupMaxSize", "GroupDesiredCapacity", "GroupInServiceInstances", "GroupPendingInstances", "GroupStandbyInstances", "GroupTerminatingInstances", "GroupTotalInstances"]
   user_data_app              = <<EOF
 #!/bin/bash -x
 sudo systemctl restart codedeploy-agent.service

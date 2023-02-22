@@ -3,8 +3,8 @@ data "aws_availability_zones" "available" {}
 module "key_pair_vpn" {
   source             = "squareops/keypair/aws"
   environment        = local.Environment
-  key_name           = format("%s_%s_vpn", local.Environment, local.Name)
-  ssm_parameter_path = format("%s_%s_vpn", local.Environment, local.Name)
+  key_name           = format("%s_%s_vpn_kp", local.Environment, local.Name)
+  ssm_parameter_path = format("%s_%s_vpn_kp", local.Environment, local.Name)
 }
 
 module "vpc" {
@@ -16,7 +16,7 @@ module "vpc" {
   enable_public_subnet                            = true
   enable_private_subnet                           = true
   enable_database_subnet                          = true
-  enable_intra_subnet                             = true
+  enable_intra_subnet                             = false
   one_nat_gateway_per_az                          = false
   vpn_server_enabled                              = true
   vpn_server_instance_type                        = "t3a.micro"

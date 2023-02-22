@@ -9,10 +9,14 @@ module "aurora_mysql" {
   engine_mode       = "serverless"
   storage_encrypted = true
 
+  create_random_password = false
+  master_password        = var.master_password
+  master_username        = var.master_username
+
   vpc_id                  = module.vpc.vpc_id
   subnets                 = module.vpc.database_subnets
   create_security_group   = false
-  allowed_security_groups = []
+  allowed_security_groups = [module.rds-sg.security_group_id]
 
   monitoring_interval = 60
 
@@ -55,10 +59,10 @@ module "rds-sg" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
 
-  name        = format("%s-%s-rds-sg", local.Environment, local.Name)
+  name        = format("%s_%s_rds_sg", local.Environment, local.Name)
   description = "Security group for Application Instances"
   vpc_id      = module.vpc.vpc_id
-    computed_ingress_with_source_security_group_id = [
+  computed_ingress_with_source_security_group_id = [
     {
       from_port                = 3306
       to_port                  = 3306
