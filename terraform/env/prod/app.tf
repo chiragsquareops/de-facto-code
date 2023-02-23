@@ -20,6 +20,17 @@ module "s3_bucket_alb_access_logs" {
 
   bucket = "laravel-access-logs"
   acl    = "log-delivery-write"
+  lifecycle_rule = [
+    {
+      id      = "monthly_retention"
+      prefix  = "/"
+      enabled = true
+
+      expiration = {
+        days = 10
+      }
+    }
+  ]
 
   force_destroy = true
 
@@ -211,8 +222,8 @@ module "alb" {
   security_groups    = [module.app_alb_sg.security_group_id]
 
   access_logs = {
-    bucket = "laravel-access-logs"
-    /* bucket = trim("module.s3_bucket_alb_access_logs.s3_bucket_bucket_domain_name", ".s3.amazonaws.com") */
+    /* bucket = "laravel-access-logs" */
+    bucket = trim(module.s3_bucket_alb_access_logs.s3_bucket_bucket_domain_name, ".s3.amazonaws.com")
   }
 
   target_groups = [
@@ -777,11 +788,20 @@ module "app_instance_records" {
   ]
 }
 
+module "vpn_records" {
+  source  = "terraform-aws-modules/route53/aws//modules/records"
+  version = "~> 2.0"
 
-resource "aws_route53_record" "vpn" {
   zone_id = local.zone_id
-  name    = local.host_headers
-  type    = "A"
-  ttl     = 300
-  records = [module.vpc.vpn_host_public_ip]
+
+  records = [
+    {
+      name    = local.host_headers
+      type    = "A"
+      ttl     = 300
+      records = [module.vpc.vpn_host_public_ip]
+    }
+  ]
 }
+
+

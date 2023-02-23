@@ -18,16 +18,15 @@ module "worker_asg_sg" {
   name        = format("%s_%s_worker_asg_sg", local.Environment, local.Name)
   description = "asg_sg"
   vpc_id      = module.vpc.vpc_id
-  computed_ingress_with_source_security_group_id = [
+  ingress_with_cidr_blocks = [
     {
-      from_port                = 22
-      to_port                  = 22
-      protocol                 = "tcp"
-      description              = "VPN Port"
-      source_security_group_id = module.vpc.vpn_security_group
-    },
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      description = "http port"
+      cidr_blocks = "0.0.0.0/0"
+    }
   ]
-  number_of_computed_ingress_with_source_security_group_id = 1
   egress_with_cidr_blocks = [
     {
       from_port   = 0
@@ -93,64 +92,31 @@ module "worker_asg" {
     Environment = local.Environment
     Name        = local.Name
   }
+  scaling_policies = {
+    scale_on_sqs_queue_policy = {
+      policy_type = "TargetTrackingScaling"
+      target_tracking_configuration = {
+        target_value = 10
+        metric_data_queries = {
+          expression  = "m1 / m2"
+          id          = "e1"
+          label       = "Calculate the backlog per instance"
+          return_data = true
+        }
+        customized_metric_specification = {
+          metric_dimension = {
+            name  = "Worker-Queue"
+            value = module.worker_sqs.queue_name
+          }
+          metric_name = "ApproximateNumberOfMessagesVisible"
+          namespace   = "AWS/SQS"
+          statistic   = "Sum"
+        }
+      }
+    }
+  }
 }
 
-
-resource "aws_autoscaling_policy" "asg_worker_SQS_scale_in_policy" {
-  name                   = "${local.Name}_worker_SQS_scale_in_policy"
-  autoscaling_group_name = module.worker_asg.autoscaling_group_name
-  adjustment_type        = "ChangeInCapacity"
-  scaling_adjustment     = "-1"
-  cooldown               = "300"
-  policy_type            = "SimpleScaling"
-}
-
-module "asg_worker_SQS_scale_in_alarm" {
-  source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
-  version = "~> 3.0"
-
-  alarm_name          = "${local.Name}_asg_worker_SQS_scale_in_alarm"
-  alarm_description   = "worker_asg_scale_in_ram_alarm"
-  comparison_operator = "LessThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  threshold           = local.worker_threshold_scale_in
-  period              = 60
-  unit                = "Count"
-
-  namespace   = "SQS"
-  metric_name = "ApproximateNumberOfMessagesVisible"
-  statistic   = "Average"
-
-  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_SQS_scale_in_policy.arn]
-}
-
-resource "aws_autoscaling_policy" "asg_worker_SQS_scale_out_policy" {
-  name                   = "${local.Name}_worker_SQS_scale_out_policy"
-  autoscaling_group_name = module.worker_asg.autoscaling_group_name
-  adjustment_type        = "ChangeInCapacity"
-  scaling_adjustment     = "1"
-  cooldown               = "300"
-  policy_type            = "SimpleScaling"
-}
-
-module "asg_worker_SQS_scale_out_alarm" {
-  source  = "terraform-aws-modules/cloudwatch/aws//modules/metric-alarm"
-  version = "~> 3.0"
-
-  alarm_name          = "${local.Name}_asg_worker_SQS_scale_out_alarm"
-  alarm_description   = "worker_asg_scale_out_SQS_alarm"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  threshold           = local.worker_threshold_scale_out
-  period              = 60
-  unit                = "Count"
-
-  namespace   = "SQS"
-  metric_name = "ApproximateNumberOfMessagesVisible"
-  statistic   = "Average"
-
-  alarm_actions = [resource.aws_autoscaling_policy.asg_worker_SQS_scale_out_policy.arn]
-}
 
 resource "aws_iam_role" "worker_codebuild_role" {
   name = format("%s_%s_worker_codebuild_role", local.Environment, local.Name)
@@ -443,8 +409,8 @@ resource "aws_codepipeline" "worker_codepipeline" {
       version         = "1"
 
       configuration = {
-        ApplicationName     = resource.aws_codedeploy_app.app.name
-        DeploymentGroupName = resource.aws_codedeploy_deployment_group.app_deploy_group.deployment_group_name
+        ApplicationName     = resource.aws_codedeploy_app.worker.name
+        DeploymentGroupName = resource.aws_codedeploy_deployment_group.worker_deploy_group.deployment_group_name
       }
     }
   }

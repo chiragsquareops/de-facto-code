@@ -16,7 +16,7 @@ module "aurora_mysql" {
   vpc_id                  = module.vpc.vpc_id
   subnets                 = module.vpc.database_subnets
   create_security_group   = false
-  allowed_security_groups = [module.rds-sg.security_group_id]
+  allowed_security_groups = [module.rds_aurora_sg.security_group_id]
 
   monitoring_interval = 60
 
@@ -55,7 +55,7 @@ resource "aws_rds_cluster_parameter_group" "aurora_db_mysql" {
   }
 }
 
-module "rds-sg" {
+module "rds_aurora_sg" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 4.13"
 

@@ -16,8 +16,8 @@ module "vpc" {
   enable_public_subnet                            = true
   enable_private_subnet                           = true
   enable_database_subnet                          = true
-  enable_intra_subnet                             = false
-  one_nat_gateway_per_az                          = false
+  enable_intra_subnet                             = true
+  one_nat_gateway_per_az                          = true
   vpn_server_enabled                              = true
   vpn_server_instance_type                        = "t3a.micro"
   vpn_key_pair                                    = module.key_pair_vpn.key_pair_name

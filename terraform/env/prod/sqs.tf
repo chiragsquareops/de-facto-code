@@ -1,4 +1,4 @@
-module "sqs" {
+module "worker_sqs" {
   source = "terraform-aws-modules/sqs/aws"
 
   name = format("%s_%s_worker_sqs", local.Environment, local.Name)
