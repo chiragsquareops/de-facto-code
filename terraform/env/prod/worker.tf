@@ -18,15 +18,17 @@ module "worker_asg_sg" {
   name        = format("%s_%s_worker_asg_sg", local.Environment, local.Name)
   description = "asg_sg"
   vpc_id      = module.vpc.vpc_id
-  ingress_with_cidr_blocks = [
+  computed_ingress_with_source_security_group_id = [
     {
-      from_port   = 22
-      to_port     = 22
-      protocol    = "tcp"
-      description = "http port"
-      cidr_blocks = "0.0.0.0/0"
-    }
+      from_port                = 22
+      to_port                  = 22
+      protocol                 = "tcp"
+      description              = "VPN Port"
+      source_security_group_id = module.vpc.vpn_security_group
+    },
   ]
+
+  number_of_computed_ingress_with_source_security_group_id = 2
   egress_with_cidr_blocks = [
     {
       from_port   = 0

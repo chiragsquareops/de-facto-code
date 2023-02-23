@@ -155,7 +155,7 @@ module "app_asg" {
 }
 
 
-resource "aws_autoscaling_policy" "app_asg_RAM_based_scale_out_policy" {
+resource "aws_autoscaling_policy" "app_asg_RAM_scale_out_policy" {
   name                   = "${local.Name}_app_asg_RAM_scale_out_policy"
   autoscaling_group_name = module.app_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
@@ -180,11 +180,11 @@ module "app_asg_ram_scale_out_alarm" {
   metric_name = "mem_used_percent"
   statistic   = "Average"
 
-  alarm_actions = [aws_autoscaling_policy.app_asg_RAM_based_scale_out_policy.arn]
+  alarm_actions = [aws_autoscaling_policy.app_asg_RAM_scale_out_policy.arn]
 }
 
 
-resource "aws_autoscaling_policy" "app_asg_RAM_based_scale_in_policy" {
+resource "aws_autoscaling_policy" "app_asg_RAM_scale_in_policy" {
   name                   = "${local.Name}_app_asg_RAM_scale_in_policy"
   autoscaling_group_name = module.app_asg.autoscaling_group_name
   adjustment_type        = "ChangeInCapacity"
@@ -209,7 +209,7 @@ module "ram_metric_scale_in_alarm" {
   metric_name = "mem_used_percent"
   statistic   = "Average"
 
-  alarm_actions = [resource.aws_autoscaling_policy.app_asg_RAM_based_scale_in_policy.arn]
+  alarm_actions = [resource.aws_autoscaling_policy.app_asg_RAM_scale_in_policy.arn]
 }
 
 module "alb" {
@@ -222,8 +222,7 @@ module "alb" {
   security_groups    = [module.app_alb_sg.security_group_id]
 
   access_logs = {
-    /* bucket = "laravel-access-logs" */
-    bucket = trim(module.s3_bucket_alb_access_logs.s3_bucket_bucket_domain_name, ".s3.amazonaws.com")
+    bucket = "laravel-access-logs"
   }
 
   target_groups = [
