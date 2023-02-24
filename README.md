@@ -25,7 +25,6 @@
     │   └── prod
     │       ├── app.tf
     │       ├── backend.tf
-    │       ├── Infra
     │       ├── local.tf
     │       ├── output.tf
     │       ├── provider.tf
