@@ -2,7 +2,6 @@ data "aws_availability_zones" "available" {}
 
 module "key_pair_vpn" {
   source             = "squareops/keypair/aws"
-  version            = "2.0.0"
   environment        = local.Environment
   key_name           = format("%s_%s_vpn_kp", local.Environment, local.Name)
   ssm_parameter_path = format("%s_%s_vpn_kp", local.Environment, local.Name)
@@ -10,7 +9,6 @@ module "key_pair_vpn" {
 
 module "vpc" {
   source                                          = "squareops/vpc/aws"
-  version                                         = "3.14.4"
   environment                                     = local.Environment
   name                                            = local.Name
   vpc_cidr                                        = local.vpc_cidr

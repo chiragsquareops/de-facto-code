@@ -12,7 +12,6 @@ module "aurora_mysql" {
 
   create_random_password = false
   master_password        = var.master_password
-  master_username        = var.master_username
 
   vpc_id                  = module.vpc.vpc_id
   subnets                 = module.vpc.database_subnets
