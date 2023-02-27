@@ -14,4 +14,4 @@
 *.tfvars
 *.tfvars.json
 
-*.md
+hold dev Env --> setup proper production.md
