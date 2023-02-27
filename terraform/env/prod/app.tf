@@ -803,4 +803,3 @@ module "vpn_records" {
   ]
 }
 
-

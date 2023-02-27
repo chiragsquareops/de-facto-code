@@ -21,7 +21,7 @@ module "vpc" {
   vpn_server_enabled                              = true
   vpn_server_instance_type                        = "t3a.micro"
   vpn_key_pair                                    = module.key_pair_vpn.key_pair_name
-  enable_flow_log                                 = false
+  enable_flow_log                                 = true
   flow_log_max_aggregation_interval               = 60
   flow_log_cloudwatch_log_group_retention_in_days = 90
 }

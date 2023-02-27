@@ -88,4 +88,4 @@ module "rds_aurora_sg" {
       cidr_blocks = "0.0.0.0/0"
     }
   ]
-}
+} 
