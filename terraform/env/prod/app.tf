@@ -10,13 +10,15 @@
 
 module "key_pair_app" {
   source             = "squareops/keypair/aws"
+  version            = "2.0.0"
   environment        = local.Environment
   key_name           = format("%s_%s_app_asg_kp", local.Environment, local.Name)
   ssm_parameter_path = format("%s_%s_app_asg_kp", local.Environment, local.Name)
 }
 
 module "s3_bucket_alb_access_logs" {
-  source = "terraform-aws-modules/s3-bucket/aws"
+  source  = "terraform-aws-modules/s3-bucket/aws"
+  version = "3.7.0"
 
   bucket = "laravel-access-logs"
   acl    = "log-delivery-write"

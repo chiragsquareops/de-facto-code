@@ -123,7 +123,7 @@ output "worker_sg_security_group_id" {
   description = "The ID of the security group of Worker Application ASG"
 }
 
-output "Worker_autoscaling_group_arn" {
+output "worker_autoscaling_group_arn" {
   value       = module.worker_asg.autoscaling_group_arn
   description = "The ARN for Worker AutoScaling Group"
 }

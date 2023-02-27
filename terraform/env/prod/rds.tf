@@ -2,7 +2,8 @@
 # aurora serverless --> Check for the modules 
 
 module "aurora_mysql" {
-  source = "terraform-aws-modules/rds-aurora/aws"
+  source  = "terraform-aws-modules/rds-aurora/aws"
+  version = "7.6.2"
 
   name              = format("%s-%s-mysql", local.Environment, local.Name)
   engine            = "aurora-mysql"
@@ -88,4 +89,4 @@ module "rds_aurora_sg" {
       cidr_blocks = "0.0.0.0/0"
     }
   ]
-} 
+}
