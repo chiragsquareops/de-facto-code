@@ -22,18 +22,19 @@
 | <a name="module_app_asg_ram_scale_out_alarm"></a> [app\_asg\_ram\_scale\_out\_alarm](#module\_app\_asg\_ram\_scale\_out\_alarm) | terraform-aws-modules/cloudwatch/aws//modules/metric-alarm | ~> 3.0 |
 | <a name="module_app_asg_sg"></a> [app\_asg\_sg](#module\_app\_asg\_sg) | terraform-aws-modules/security-group/aws | ~> 4.13 |
 | <a name="module_app_instance_records"></a> [app\_instance\_records](#module\_app\_instance\_records) | terraform-aws-modules/route53/aws//modules/records | ~> 2.0 |
-| <a name="module_aurora_mysql"></a> [aurora\_mysql](#module\_aurora\_mysql) | terraform-aws-modules/rds-aurora/aws | n/a |
-| <a name="module_key_pair_app"></a> [key\_pair\_app](#module\_key\_pair\_app) | squareops/keypair/aws | n/a |
-| <a name="module_key_pair_vpn"></a> [key\_pair\_vpn](#module\_key\_pair\_vpn) | squareops/keypair/aws | n/a |
-| <a name="module_key_pair_worker_asg"></a> [key\_pair\_worker\_asg](#module\_key\_pair\_worker\_asg) | squareops/keypair/aws | n/a |
+| <a name="module_aurora_mysql"></a> [aurora\_mysql](#module\_aurora\_mysql) | terraform-aws-modules/rds-aurora/aws | 7.6.2 |
+| <a name="module_backend"></a> [backend](#module\_backend) | squareops/tfstate/aws | n/a |
+| <a name="module_key_pair_app"></a> [key\_pair\_app](#module\_key\_pair\_app) | squareops/keypair/aws | 2.0.0 |
+| <a name="module_key_pair_vpn"></a> [key\_pair\_vpn](#module\_key\_pair\_vpn) | squareops/keypair/aws | 2.0.0 |
+| <a name="module_key_pair_worker_asg"></a> [key\_pair\_worker\_asg](#module\_key\_pair\_worker\_asg) | squareops/keypair/aws | 2.0.0 |
 | <a name="module_ram_metric_scale_in_alarm"></a> [ram\_metric\_scale\_in\_alarm](#module\_ram\_metric\_scale\_in\_alarm) | terraform-aws-modules/cloudwatch/aws//modules/metric-alarm | ~> 3.0 |
 | <a name="module_rds_aurora_sg"></a> [rds\_aurora\_sg](#module\_rds\_aurora\_sg) | terraform-aws-modules/security-group/aws | ~> 4.13 |
-| <a name="module_s3_bucket_alb_access_logs"></a> [s3\_bucket\_alb\_access\_logs](#module\_s3\_bucket\_alb\_access\_logs) | terraform-aws-modules/s3-bucket/aws | n/a |
-| <a name="module_vpc"></a> [vpc](#module\_vpc) | squareops/vpc/aws | n/a |
+| <a name="module_s3_bucket_alb_access_logs"></a> [s3\_bucket\_alb\_access\_logs](#module\_s3\_bucket\_alb\_access\_logs) | terraform-aws-modules/s3-bucket/aws | 3.7.0 |
+| <a name="module_vpc"></a> [vpc](#module\_vpc) | squareops/vpc/aws | 3.14.4 |
 | <a name="module_vpn_records"></a> [vpn\_records](#module\_vpn\_records) | terraform-aws-modules/route53/aws//modules/records | ~> 2.0 |
 | <a name="module_worker_asg"></a> [worker\_asg](#module\_worker\_asg) | terraform-aws-modules/autoscaling/aws | 6.7.0 |
 | <a name="module_worker_asg_sg"></a> [worker\_asg\_sg](#module\_worker\_asg\_sg) | terraform-aws-modules/security-group/aws | ~> 4.13 |
-| <a name="module_worker_sqs"></a> [worker\_sqs](#module\_worker\_sqs) | terraform-aws-modules/sqs/aws | n/a |
+| <a name="module_worker_sqs"></a> [worker\_sqs](#module\_worker\_sqs) | terraform-aws-modules/sqs/aws | 4.0.1 |
 
 ## Resources
 
@@ -82,7 +83,6 @@
 
 | Name | Description |
 |------|-------------|
-| <a name="output_Worker_autoscaling_group_arn"></a> [Worker\_autoscaling\_group\_arn](#output\_Worker\_autoscaling\_group\_arn) | The ARN for Worker AutoScaling Group |
 | <a name="output_access_logs_s3_bucket_arn"></a> [access\_logs\_s3\_bucket\_arn](#output\_access\_logs\_s3\_bucket\_arn) | The ARN of the bucket. Will be of format arn:aws:s3:::bucketname. |
 | <a name="output_acm_certificate_arn"></a> [acm\_certificate\_arn](#output\_acm\_certificate\_arn) | The ARN of the certificate |
 | <a name="output_acm_certificate_status"></a> [acm\_certificate\_status](#output\_acm\_certificate\_status) | Status of the certificate. |
@@ -116,6 +116,7 @@
 | <a name="output_vpc_id"></a> [vpc\_id](#output\_vpc\_id) | The ID of the VPC |
 | <a name="output_vpn_host_public_ip"></a> [vpn\_host\_public\_ip](#output\_vpn\_host\_public\_ip) | IP Address of VPN Server |
 | <a name="output_vpn_security_group"></a> [vpn\_security\_group](#output\_vpn\_security\_group) | Security Group ID of VPN Server |
+| <a name="output_worker_autoscaling_group_arn"></a> [worker\_autoscaling\_group\_arn](#output\_worker\_autoscaling\_group\_arn) | The ARN for Worker AutoScaling Group |
 | <a name="output_worker_autoscaling_group_id"></a> [worker\_autoscaling\_group\_id](#output\_worker\_autoscaling\_group\_id) | The autoscaling group id of worker |
 | <a name="output_worker_autoscaling_group_load_balancers"></a> [worker\_autoscaling\_group\_load\_balancers](#output\_worker\_autoscaling\_group\_load\_balancers) | The load balancer names associated with the autoscaling group |
 | <a name="output_worker_autoscaling_group_target_group_arns"></a> [worker\_autoscaling\_group\_target\_group\_arns](#output\_worker\_autoscaling\_group\_target\_group\_arns) | List of Target Group ARNs that apply to this AutoScaling Group |
