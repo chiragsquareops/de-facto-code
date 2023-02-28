@@ -91,9 +91,9 @@ module "rds_aurora_sg" {
   ]
 }
 
-resource "null_resource" "db_setup" {
+/* resource "null_resource" "db_setup" {
   depends_on = [module.aurora_mysql, module.rds_aurora_sg]
   provisioner "local-exec" {
     command = "sudo mysql --host=${module.aurora_mysql.cluster_endpoint} --port=3306 --user=root --password=Admin123 < ${file("${path.module}/schema.sql")}"
   }
-}
+} */

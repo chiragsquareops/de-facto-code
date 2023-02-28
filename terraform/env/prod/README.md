@@ -23,7 +23,6 @@
 | <a name="module_app_asg_sg"></a> [app\_asg\_sg](#module\_app\_asg\_sg) | terraform-aws-modules/security-group/aws | ~> 4.13 |
 | <a name="module_app_instance_records"></a> [app\_instance\_records](#module\_app\_instance\_records) | terraform-aws-modules/route53/aws//modules/records | ~> 2.0 |
 | <a name="module_aurora_mysql"></a> [aurora\_mysql](#module\_aurora\_mysql) | terraform-aws-modules/rds-aurora/aws | 7.6.2 |
-| <a name="module_backend"></a> [backend](#module\_backend) | squareops/tfstate/aws | n/a |
 | <a name="module_key_pair_app"></a> [key\_pair\_app](#module\_key\_pair\_app) | squareops/keypair/aws | n/a |
 | <a name="module_key_pair_vpn"></a> [key\_pair\_vpn](#module\_key\_pair\_vpn) | squareops/keypair/aws | n/a |
 | <a name="module_key_pair_worker_asg"></a> [key\_pair\_worker\_asg](#module\_key\_pair\_worker\_asg) | squareops/keypair/aws | n/a |
@@ -84,27 +83,38 @@
 | Name | Description |
 |------|-------------|
 | <a name="output_access_logs_s3_bucket_arn"></a> [access\_logs\_s3\_bucket\_arn](#output\_access\_logs\_s3\_bucket\_arn) | The ARN of the bucket. Will be of format arn:aws:s3:::bucketname. |
+| <a name="output_acm_certificate_arn"></a> [acm\_certificate\_arn](#output\_acm\_certificate\_arn) | The ARN of the certificate |
+| <a name="output_acm_certificate_status"></a> [acm\_certificate\_status](#output\_acm\_certificate\_status) | Status of the certificate. |
 | <a name="output_app_autoscaling_group_arn"></a> [app\_autoscaling\_group\_arn](#output\_app\_autoscaling\_group\_arn) | The ARN for App AutoScaling Group |
 | <a name="output_app_autoscaling_group_id"></a> [app\_autoscaling\_group\_id](#output\_app\_autoscaling\_group\_id) | The autoscaling group id of app |
 | <a name="output_app_autoscaling_group_load_balancers"></a> [app\_autoscaling\_group\_load\_balancers](#output\_app\_autoscaling\_group\_load\_balancers) | The load balancer names associated with the autoscaling group |
 | <a name="output_app_autoscaling_group_target_group_arns"></a> [app\_autoscaling\_group\_target\_group\_arns](#output\_app\_autoscaling\_group\_target\_group\_arns) | List of Target Group ARNs that apply to this AutoScaling Group |
 | <a name="output_app_autoscaling_policy_arns"></a> [app\_autoscaling\_policy\_arns](#output\_app\_autoscaling\_policy\_arns) | ARNs of app autoscaling policies |
+| <a name="output_app_https_listener_arns"></a> [app\_https\_listener\_arns](#output\_app\_https\_listener\_arns) | The ARNs of the HTTPS load balancer listeners created |
 | <a name="output_app_iam_role_arn"></a> [app\_iam\_role\_arn](#output\_app\_iam\_role\_arn) | The Amazon Resource Name (ARN) specifying the IAM role |
 | <a name="output_app_launch_template_id"></a> [app\_launch\_template\_id](#output\_app\_launch\_template\_id) | The ID of the launch template |
+| <a name="output_app_lb_arn"></a> [app\_lb\_arn](#output\_app\_lb\_arn) | The ID and ARN of the load balancer we created |
+| <a name="output_app_lb_dns_name"></a> [app\_lb\_dns\_name](#output\_app\_lb\_dns\_name) | The DNS name of the load balancer |
+| <a name="output_app_route53_record_name"></a> [app\_route53\_record\_name](#output\_app\_route53\_record\_name) | The name of the record |
 | <a name="output_app_sg_security_group_id"></a> [app\_sg\_security\_group\_id](#output\_app\_sg\_security\_group\_id) | The ID of the security group of Application ASG |
-| <a name="output_database_subnets"></a> [database\_subnets](#output\_database\_subnets) | List of IDs of database subnets |
 | <a name="output_db_security_group_id"></a> [db\_security\_group\_id](#output\_db\_security\_group\_id) | The security group ID of the cluster |
-| <a name="output_dynamodb_table_name"></a> [dynamodb\_table\_name](#output\_dynamodb\_table\_name) | dynamodb table name |
-| <a name="output_intra_subnets"></a> [intra\_subnets](#output\_intra\_subnets) | List of IDs of Intra subnets |
-| <a name="output_log_bucket_name"></a> [log\_bucket\_name](#output\_log\_bucket\_name) | logging table name |
-| <a name="output_private_subnets"></a> [private\_subnets](#output\_private\_subnets) | List of IDs of private subnets |
+| <a name="output_lb_id"></a> [lb\_id](#output\_lb\_id) | The ID and ARN of the load balancer we created |
+| <a name="output_lb_zone_id"></a> [lb\_zone\_id](#output\_lb\_zone\_id) | The zone\_id of the load balancer to assist with creating DNS records |
 | <a name="output_public_subnets"></a> [public\_subnets](#output\_public\_subnets) | List of IDs of public subnets |
 | <a name="output_rds_cluster_arn"></a> [rds\_cluster\_arn](#output\_rds\_cluster\_arn) | Amazon Resource Name (ARN) of RDS cluster |
 | <a name="output_rds_cluster_database_name"></a> [rds\_cluster\_database\_name](#output\_rds\_cluster\_database\_name) | Name for an automatically created database on cluster creation |
 | <a name="output_rds_cluster_endpoint"></a> [rds\_cluster\_endpoint](#output\_rds\_cluster\_endpoint) | Writer endpoint for the cluster |
-| <a name="output_state_bucket_name"></a> [state\_bucket\_name](#output\_state\_bucket\_name) | bucket name with id |
+| <a name="output_target_group_arns"></a> [target\_group\_arns](#output\_target\_group\_arns) | ARNs of the target groups. Useful for passing to your Auto Scaling group |
 | <a name="output_vpc_cidr_block"></a> [vpc\_cidr\_block](#output\_vpc\_cidr\_block) | IPV4 CIDR Block for this VPC |
 | <a name="output_vpc_id"></a> [vpc\_id](#output\_vpc\_id) | The ID of the VPC |
 | <a name="output_vpn_host_public_ip"></a> [vpn\_host\_public\_ip](#output\_vpn\_host\_public\_ip) | IP Address of VPN Server |
 | <a name="output_vpn_security_group"></a> [vpn\_security\_group](#output\_vpn\_security\_group) | Security Group ID of VPN Server |
+| <a name="output_worker_autoscaling_group_arn"></a> [worker\_autoscaling\_group\_arn](#output\_worker\_autoscaling\_group\_arn) | The ARN for Worker AutoScaling Group |
+| <a name="output_worker_autoscaling_group_id"></a> [worker\_autoscaling\_group\_id](#output\_worker\_autoscaling\_group\_id) | The autoscaling group id of worker |
+| <a name="output_worker_autoscaling_group_load_balancers"></a> [worker\_autoscaling\_group\_load\_balancers](#output\_worker\_autoscaling\_group\_load\_balancers) | The load balancer names associated with the autoscaling group |
+| <a name="output_worker_autoscaling_group_target_group_arns"></a> [worker\_autoscaling\_group\_target\_group\_arns](#output\_worker\_autoscaling\_group\_target\_group\_arns) | List of Target Group ARNs that apply to this AutoScaling Group |
+| <a name="output_worker_autoscaling_policy_arns"></a> [worker\_autoscaling\_policy\_arns](#output\_worker\_autoscaling\_policy\_arns) | ARNs of worker autoscaling policies |
+| <a name="output_worker_iam_role_arn"></a> [worker\_iam\_role\_arn](#output\_worker\_iam\_role\_arn) | The Amazon Resource Name (ARN) specifying the IAM role |
+| <a name="output_worker_launch_template_id"></a> [worker\_launch\_template\_id](#output\_worker\_launch\_template\_id) | The ID of the launch template |
+| <a name="output_worker_sg_security_group_id"></a> [worker\_sg\_security\_group\_id](#output\_worker\_sg\_security\_group\_id) | The ID of the security group of Worker Application ASG |
 <!-- END_TF_DOCS -->
