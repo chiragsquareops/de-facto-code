@@ -1,32 +1,4 @@
-output "dynamodb_table_name" {
-  value       = module.backend.dynamodb_table_name
-  description = "dynamodb table name"
-}
 
-output "log_bucket_name" {
-  value       = module.backend.log_bucket_name
-  description = "logging table name"
-}
-
-output "state_bucket_name" {
-  value       = module.backend.state_bucket_name
-  description = "bucket name with id"
-}
-
-output "database_subnets" {
-  value       = module.vpc.database_subnets
-  description = "List of IDs of database subnets"
-}
-
-output "intra_subnets" {
-  value       = module.vpc.intra_subnets
-  description = "List of IDs of Intra subnets"
-}
-
-output "private_subnets" {
-  value       = module.vpc.private_subnets
-  description = "List of IDs of private subnets"
-}
 
 output "public_subnets" {
   value       = module.vpc.public_subnets
@@ -118,7 +90,7 @@ output "app_launch_template_id" {
   description = "The ID of the launch template"
 }
 
-/* output "worker_sg_security_group_id" {
+output "worker_sg_security_group_id" {
   value       = module.worker_asg_sg.security_group_id
   description = "The ID of the security group of Worker Application ASG"
 }
@@ -201,4 +173,4 @@ output "acm_certificate_status" {
 output "app_route53_record_name" {
   value       = module.app_instance_records.route53_record_name
   description = "The name of the record"
-} */
+}

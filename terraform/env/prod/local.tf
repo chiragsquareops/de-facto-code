@@ -41,5 +41,5 @@ EOF
   vpn_name     = "appvpn"
   domain_name  = "labs.squareops.in"
   zone_id_alb  = "Z35SXDOTRQ7X7K"
-  rds_name     = "prod-laravel"
+  rds_name     = "prod-laravel-mysql"
 }
