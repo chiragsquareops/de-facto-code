@@ -24,7 +24,6 @@
     │   │   └── worker.tf
     │   └── prod
     │       ├── app.tf
-    │       ├── backend.tf
     │       ├── local.tf
     │       ├── output.tf
     │       ├── provider.tf
