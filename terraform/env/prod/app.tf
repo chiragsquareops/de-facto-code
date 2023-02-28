@@ -123,6 +123,8 @@ module "app_asg" {
     AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     AmazonEC2RoleforAWSCodeDeploy = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
     AWSCodeDeployRole             = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+    CloudWatchAgentServerPolicy   = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+    CloudWatchAgentAdminPolicy    = "arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy"
   }
 
   tags = {
@@ -812,7 +814,7 @@ module "rds_records" {
 
   records = [
     {
-      name    = local.rds_name 
+      name    = local.rds_name
       type    = "CNAME"
       ttl     = 300
       records = [module.aurora_mysql.cluster_endpoint]

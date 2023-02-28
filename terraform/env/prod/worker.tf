@@ -88,6 +88,8 @@ module "worker_asg" {
     AmazonSSMManagedInstanceCore  = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     AmazonEC2RoleforAWSCodeDeploy = "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy"
     AWSCodeDeployRole             = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+    CloudWatchAgentServerPolicy   = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+    CloudWatchAgentAdminPolicy    = "arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy"
   }
 
   tags = {
