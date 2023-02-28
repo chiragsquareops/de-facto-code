@@ -17,6 +17,7 @@ module "aurora_mysql" {
   subnets                 = module.vpc.database_subnets
   create_security_group   = false
   allowed_security_groups = [module.rds_aurora_sg.security_group_id]
+  vpc_security_group_ids  = [module.rds_aurora_sg.security_group_id]
 
   monitoring_interval = 60
 
