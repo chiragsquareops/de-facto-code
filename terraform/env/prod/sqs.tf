@@ -4,7 +4,7 @@ module "worker_sqs" {
 
   name = format("%s_%s_worker_sqs", local.Environment, local.Name)
 
-  fifo_queue = true
+  fifo_queue = false
 
   tags = {
     Environment = local.Environment
